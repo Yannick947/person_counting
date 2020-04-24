@@ -19,6 +19,22 @@ def get_optimizer(optimizer, learning_rate=1e-4):
     return optimizer_configured
 
 
+def get_static_hparams(args): 
+    '''
+    '''
+    logging_ret = dict()
+    LOGGING_ARGS = ['batch_size',
+                    'filter_cols',
+                    'filter_cols_factor',
+                    'filter_rows_factor']
+
+    for key in LOGGING_ARGS:
+        logging_ret.__setattr__(key, args[key])
+
+    print(logging_ret)
+    return logging_ret
+
+
 def create_callbacks(logdir, hparams=None): 
     '''
     '''
@@ -60,3 +76,5 @@ def create_hyperparams_domains():
     metrics = [HP_TRAIN_LOSS, HP_VAL_LOSS] 
 
     return hp_domains, metrics
+
+

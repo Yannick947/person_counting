@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 import numpy as np
 import random
@@ -13,25 +14,29 @@ from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot, visualize_predictions
 from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer
+from person_counting.models.model_argparse import parse_args
 
-LOGDIR_TOP = os.path.join('tensorboard\\')
-n_runs = 100
+#Static params for local use, in colab set via arguments
 
+def main(args=None):
 
-def main():
+    # parse arguments
+    if args is None:
+        args = sys.argv[1:]
+    args = parse_args(args)
 
-    timestep_num, feature_num = dgv.get_filtered_lengths()
-    datagen_train, datagen_test = dgv_cnn.create_datagen()
+    timestep_num, feature_num = dgv.get_filtered_lengths(args)
+    datagen_train, datagen_test = dgv_cnn.create_datagen(args)
     # test_best(timestep_num, feature_num, datagen_train, datagen_test)
 
-    hparams_samples = get_samples(n_runs)
+    hparams_samples = get_samples(args)
     for sample in hparams_samples: 
-        logdir = os.path.join(LOGDIR_TOP + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
+        logdir = os.path.join(args.topdir_log + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
         model = create_cnn(timestep_num, feature_num, sample)
         train(model, datagen_train, logdir, sample, datagen_test)
 
 
-def get_samples(n_runs=10):
+def get_samples(args):
     '''
     '''
 
@@ -48,7 +53,7 @@ def get_samples(n_runs=10):
                   'y_stride'            : [1, 1, 1, 2]
                  }
 
-    return list(ParameterSampler(param_grid, n_iter=n_runs))
+    return list(ParameterSampler(param_grid, n_iter=args.n_runs))
 
 
 def test_best(timestep_num,

@@ -1,3 +1,4 @@
+import sys
 import os 
 import pandas as pd
 import numpy as np
@@ -9,17 +10,10 @@ from tensorflow import keras
 from sklearn.model_selection import train_test_split
 
 from person_counting.utils import scaler
+from person_counting.models.model_argparse import parse_args
 
 
-TOP_PATH = 'C:/Users/Yannick/Google Drive/person_detection/bus_videos/pcds_dataset_detected/'
-# TOP_PATH = '/content/drive/My Drive/person_detection/bus_videos/pcds_dataset_detected/'
-LABEL_FILE = 'pcds_dataset_labels_united.csv'
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
-
-#Factor which indicates how many of the timesteps shall be skipped
-# FILTER_ROWS = 5 means every fifth timestep will be used
-FILTER_ROWS_FACTOR = 3
-FILTER_COLS = 10
 
 np.random.seed(42)
 
@@ -31,22 +25,22 @@ class Generator_CSVS(keras.utils.Sequence):
                  length_y,
                  file_names,
                  filter_cols,
-                 filter_rows,
+                 filter_rows_factor,
                  batch_size, 
-                 top_path=TOP_PATH,
-                 label_file=LABEL_FILE): 
+                 top_path,
+                 label_file): 
 
-        self.top_path       = top_path
-        self.label_file     = label_file
-        self.length_t       = length_t
-        self.length_y       = length_y
-        self.file_names     = file_names 
-        self.filter_cols    = filter_cols
-        self.filter_rows    = filter_rows
-        self.batch_size     = batch_size
-        self.labels         = list()
-        self.scaler         = scaler.CSVScaler(top_path, label_file, file_names)
-        self.df_y           = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
+        self.top_path               = top_path
+        self.label_file             = label_file
+        self.length_t               = length_t
+        self.length_y               = length_y
+        self.file_names             = file_names 
+        self.filter_cols            = filter_cols
+        self.filter_rows_factor     = filter_rows_factor
+        self.batch_size             = batch_size
+        self.labels                 = list()
+        self.scaler                 = scaler.CSVScaler(top_path, label_file, file_names)
+        self.df_y                   = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
 
     @abc.abstractmethod
     def datagen(self):
@@ -59,7 +53,7 @@ class Generator_CSVS(keras.utils.Sequence):
 
         df_x = self.__get_features(file_name)
         #Only remove when index is saved in csv
-        if check_for_index_col(TOP_PATH):
+        if check_for_index_col(self.top_path):
             df_x.drop(df_x.columns[0], axis=1, inplace=True)
 
         if df_x is not None:
@@ -72,7 +66,7 @@ class Generator_CSVS(keras.utils.Sequence):
             raise FileNotFoundError('No matching csv for existing label, or scaling went wrong')
 
         df_x = clean_ends(df_x, del_leading=self.filter_cols, del_trailing=self.filter_cols)
-        df_x = filter_rows(df_x, self.filter_rows)
+        df_x = filter_rows(df_x, self.filter_rows_factor)
         assert df_x.shape[0] == (self.length_t)\
            and df_x.shape[1] == (self.length_y) 
 
@@ -88,7 +82,7 @@ class Generator_CSVS(keras.utils.Sequence):
             returns: Features for given file_name
         '''
 
-        full_path = os.path.join(TOP_PATH, file_name)
+        full_path = os.path.join(self.top_path, file_name)
 
         try:
             df_x = pd.read_csv(full_path, header=None)
@@ -121,17 +115,17 @@ def check_for_index_col(top_path):
                 return True
 
 
-def split_files():
-    df_names = pd.read_csv(TOP_PATH + LABEL_FILE).iloc[:,0]
+def split_files(args):
+    df_names = pd.read_csv(args.top_path + args.label_file).iloc[:,0]
 
     #replace .avi with .csv
     df_names = df_names.apply(lambda row: row[:-4] + '.csv')
-    return train_test_split(df_names, test_size=0.2, random_state=42)
+    return train_test_split(df_names, test_size=0.25, random_state=42)
             
 
 def get_filters(file_names): 
     #TODO: Implement. Now dummy function
-    return FILTER_COLS, FILTER_ROWS_FACTOR
+    pass
 
 
 def get_entering(file_name, df_y): 
@@ -194,15 +188,16 @@ def clean_ends(df, del_leading=5, del_trailing=5):
     return df
 
 
-def filter_rows(df, filter_rows): 
+def filter_rows(df, filter_rows_factor): 
     '''
     '''
-    return df.iloc[::filter_rows, :]
+
+    return df.iloc[::filter_rows_factor, :]
 
 
-def get_lengths(top_path=TOP_PATH):
+def get_lengths(top_path):
     '''
-    returns: Number of timesteps, number of features (columns)
+    returns: Number of timesteps, number of features (columns) which csv files have
     '''
 
     for root, _, files in os.walk(top_path): 
@@ -217,21 +212,19 @@ def get_lengths(top_path=TOP_PATH):
                     return df.shape[0], df.shape[1]
 
 
-def get_filtered_lengths(top_path=TOP_PATH,
-                         filter_cols=FILTER_COLS,
-                         filter_rows=FILTER_ROWS_FACTOR):
+def get_filtered_lengths(args):
     '''
-    
     '''
-    timestep_num, feature_num = get_lengths(top_path)
+
+    timestep_num, feature_num = get_lengths(args.top_path)
     #TODO: Verify that the rounding is correct, maybe math.ceil() rounding in some cases has to be used
 
-    if timestep_num % filter_rows != 0:
-        filtered_length_t = int(timestep_num / filter_rows) + 1
+    if timestep_num % args.filter_rows_factor != 0:
+        filtered_length_t = int(timestep_num / args.filter_rows_factor) + 1
     else: 
-        filtered_length_t = int(timestep_num / filter_rows) 
+        filtered_length_t = int(timestep_num / args.filter_rows_factor) 
 
-    filtered_length_y = feature_num - (2 * filter_cols)
+    filtered_length_y = feature_num - (2 * args.filter_cols)
 
     return filtered_length_t, filtered_length_y
 
