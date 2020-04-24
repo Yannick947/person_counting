@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+
+
+        {
+            "name": "data_generator_videos as module",
+            "type": "python",
+            "request": "launch",
+            "module": "data_generator_videos",
+            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+        },
+        {
+            "name": "lstm_regression as module",
+            "type": "python",
+            "request": "launch",
+            "module": "lstm_regression",
+            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+        },
+        {
+            "name": "cnn_regression as module",
+            "type": "python",
+            "request": "launch",
+            "module": "cnn_regression",
+            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+        },
+        {
+            "name": "process_download",
+            "type": "python",
+            "request": "launch",
+            "module": "process_download",
+            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+        }
+    ]
+}
