@@ -12,12 +12,14 @@ from sklearn.model_selection import train_test_split
 from person_counting.utils import scaler
 from person_counting.models.model_argparse import parse_args
 
-
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 np.random.seed(42)
 
 class Generator_CSVS(keras.utils.Sequence):
+    '''Abstract class for Generators to load csv files from 
+    video folder structre like PCDS Dataset
+    '''
     __metaclass__ = abc.ABCMeta
 
     def __init__(self,
@@ -29,6 +31,18 @@ class Generator_CSVS(keras.utils.Sequence):
                  batch_size, 
                  top_path,
                  label_file): 
+        ''' Initialize Generator object.
+
+            Arguments
+                length_t            : Length of the feature's DataFrame in time dimension
+                length_y            : Length of the feature's DataFrame in y direction
+                file_names          : File names to be processed
+                filter_cols,        : Amount of columns to be filtered at end and start of DataFrame
+                filter_rows_factor  : Factor of rows to be filtered
+                batch_size          : Batch size
+                top_path            : Parent path where csv files are contained
+                label_file          : Name of the label file
+        '''
 
         self.top_path               = top_path
         self.label_file             = label_file
@@ -44,13 +58,20 @@ class Generator_CSVS(keras.utils.Sequence):
 
     @abc.abstractmethod
     def datagen(self):
+        '''Returns datagenerator
+        '''
         return
 
     def __len__(self):
+        '''Returns the lenth of the datagen
+        '''
         return int(np.ceil(len(self.file_names) / float(self.batch_size)))    
     
     def __getitem__(self, file_name):
-
+        '''Gets pair of features and labels for given filename
+        Arguments: 
+            file_name: The name of the file which shall be parsed
+        '''
         df_x = self.__get_features(file_name)
         #Only remove when index is saved in csv
         if check_for_index_col(self.top_path):
@@ -73,8 +94,7 @@ class Generator_CSVS(keras.utils.Sequence):
         return df_x, label
 
     def __get_features(self, file_name): 
-        '''
-        Get sample of features for given filename. 
+        '''Get sample of features for given filename. 
 
         Arguments: 
             file_name: Name of given training sample
@@ -92,16 +112,39 @@ class Generator_CSVS(keras.utils.Sequence):
             # print('No matching file for label found, skip')
             return None
 
-    def get_labels(self): 
+    def get_labels(self):
+        '''Returns the labels which were yielded since calling reset_labels() 
+        '''
         return np.array(self.labels)
 
     def reset_label_states(self): 
+        '''Resets the labels which were processed
+        '''
         self.labels = list()
 
 
+def print_train_test_lengths(train_file_names, test_file_names, args):      
+    '''Print out the length of training and test files which were loaded
+    
+    Arguments: 
+        train_file_names: Names of training files 
+        test_file_names: Names of test files
+        args: Parsed args from command line
+    '''  
+    csv_names = list()
+    for _, _, files in os.walk(args.top_path):
+        csv_names = csv_names.extend(files)
+
+    train_count = sum(el in csv_names for el in train_file_names)
+    test_count =  sum(el in csv_names for el in test_file_names)
+    print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(train_count, test_count))
+    
+
 def check_for_index_col(top_path): 
-    '''
-    returns: True if disturbing index column in sample csv file exists. Doesnt hold for all.
+    '''Returns true if index column in sample csv file exists
+
+    Arguments: 
+        top_path: Path where the csv files are contained in 
     '''
 
     for root, _, files in os.walk(top_path): 
@@ -116,6 +159,9 @@ def check_for_index_col(top_path):
 
 
 def split_files(args):
+    ''' Splits all files in the training set into train and test files
+    and returns lists of names for train and test files
+    '''
     df_names = pd.read_csv(args.top_path + args.label_file).iloc[:,0]
 
     #replace .avi with .csv
@@ -123,14 +169,15 @@ def split_files(args):
     return train_test_split(df_names, test_size=0.25, random_state=42)
             
 
-def get_filters(file_names): 
+def get_filters(file_names):
+    '''Searches for the right columns amount of columns and rows to drop
+    '''
     #TODO: Implement. Now dummy function
-    pass
+    raise NotImplementedError
 
 
 def get_entering(file_name, df_y): 
-    '''
-    Get number of entering persons to existing training sample. 
+    ''' Get number of entering persons to existing training sample. 
 
     Arguments: 
         file_name: Name of given training sample
@@ -146,9 +193,9 @@ def get_entering(file_name, df_y):
         # print('No matching label found for existing csv file')
         return None
 
+
 def get_exiting(file_name, df_y): 
-    '''
-    Get number of exiting persons to existing training sample. 
+    '''Get number of exiting persons to existing training sample. 
 
     Arguments: 
         file_name: Name of given training sample
@@ -189,15 +236,22 @@ def clean_ends(df, del_leading=5, del_trailing=5):
 
 
 def filter_rows(df, filter_rows_factor): 
-    '''
+    '''Filters rows according to the filter_rows_factor in a given DataFrame
+    
+    Arguments: 
+        df: Dataframe which shall be filtered 
+        filter_rows_factor: The factor which shall be used for filtering rows, 
+                            a factor of 4 will remove 3/4 rows and keeps every
+                            forth row, starting with the first row
+        
+        returns: Filtered Dataframe
     '''
 
     return df.iloc[::filter_rows_factor, :]
 
 
 def get_lengths(top_path):
-    '''
-    returns: Number of timesteps, number of features (columns) which csv files have
+    '''returns: Number of timesteps, number of features (columns) which csv files have
     '''
 
     for root, _, files in os.walk(top_path): 
@@ -213,7 +267,11 @@ def get_lengths(top_path):
 
 
 def get_filtered_lengths(args):
-    '''
+    '''Returns the length of the feature dataframes after filtering those with 
+    the above given methods
+
+    Arguments: 
+        #TODO: Change args to meanningful variables
     '''
 
     timestep_num, feature_num = get_lengths(args.top_path)
