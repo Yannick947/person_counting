@@ -11,7 +11,13 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from person_counting.data_generators.data_generators import Generator_CSVS
 from person_counting.data_generators.data_generators import *
 
+
 class Generator_CSVS_CNN(Generator_CSVS):
+    '''
+    Generators class to load csv files from 
+    video folder structre like PCDS Dataset and
+    train CNNs
+    '''
 
     def __init__(self,*args, **kwargs):
         super(Generator_CSVS_CNN, self).__init__(*args, **kwargs)
@@ -51,30 +57,37 @@ class Generator_CSVS_CNN(Generator_CSVS):
                     yield (x_batch, y_batch)
 
 
-def create_datagen(args): 
+def create_datagen(top_path, 
+                   filter_rows_factor, 
+                   filter_cols, 
+                   batch_size, 
+                   label_file): 
     '''
     '''
-    length_t, length_y = get_filtered_lengths(args)
+    length_t, length_y = get_filtered_lengths(top_path,
+                                              filter_rows_factor,
+                                              filter_cols)
 
-    train_file_names, test_file_names = split_files(args)
+    train_file_names, test_file_names = split_files(top_path, label_file)
+    print_train_test_lengths(train_file_names, test_file_names, top_path)
 
     gen_train = Generator_CSVS_CNN(length_t,
                                    length_y,
                                    train_file_names,
-                                   args.filter_cols, 
-                                   args.filter_rows_factor,
-                                   batch_size=args.batch_size,
-                                   top_path=args.top_path,
-                                   label_file=args.label_file)
+                                   filter_cols,
+                                   filter_rows_factor,
+                                   batch_size=batch_size,
+                                   top_path=top_path,
+                                   label_file=label_file)
 
     gen_test = Generator_CSVS_CNN(length_t,
                                   length_y,
                                   test_file_names,
-                                  args.filter_cols, 
-                                  args.filter_rows_factor,
-                                  batch_size=args.batch_size,
-                                  top_path=args.top_path,
-                                  label_file=args.label_file)
+                                  filter_cols,
+                                  filter_rows_factor,
+                                  batch_size=batch_size,
+                                  top_path=top_path,
+                                  label_file=label_file)
 
     return gen_train, gen_test
 
@@ -84,8 +97,8 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     args = parse_args(args)    
-    length_t, length_y = get_filtered_lengths(args.top_path)
-    train_file_names, _ = split_files(args)
+    length_t, length_y = get_filtered_lengths(args.top_path, args.filter_rows_factor, args.filter_cols)
+    train_file_names, _ = split_files(args.top_path, args.label_file)
 
     gen = Generator_CSVS_CNN(length_t, length_y,
                          train_file_names, args.filter_cols,
