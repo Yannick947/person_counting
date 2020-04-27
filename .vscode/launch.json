@@ -11,29 +11,38 @@
             "name": "data_generator_videos as module",
             "type": "python",
             "request": "launch",
-            "module": "data_generator_videos",
-            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+            "module": "person_counting.data_generators.data_generator_videos",
+            "cwd": "C:/Users/Yannick/Google Drive/"
         },
         {
             "name": "lstm_regression as module",
             "type": "python",
             "request": "launch",
-            "module": "lstm_regression",
-            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+            "module": "person_counting.models.lstm_regression",
+            "cwd": "C:/Users/Yannick/Google Drive/"
         },
         {
             "name": "cnn_regression as module",
             "type": "python",
             "request": "launch",
-            "module": "cnn_regression",
-            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+            "module": "person_counting.models.cnn_regression",
+            "cwd": "C:/Users/Yannick/Google Drive/"
         },
         {
-            "name": "process_download",
+            "name": "cnn_regression testing debug input",
             "type": "python",
             "request": "launch",
-            "module": "process_download",
-            "cwd": "C:/Users/Yannick/Google Drive/person_detection/keras-retinanet/keras_retinanet/preprocessing_videos"
+            "module": "person_counting.tests.test_cnn",
+            "cwd": "C:/Users/Yannick/Google Drive/",
+            "args": ["test_input_csvs"],
+        }, 
+        {
+            "name": "cnn_regression show input",
+            "type": "python",
+            "request": "launch",
+            "module": "person_counting.tests.test_cnn",
+            "cwd": "C:/Users/Yannick/Google Drive/",
+            "args": ["show_feature_frames"],
         }
     ]
 }
