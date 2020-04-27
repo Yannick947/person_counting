@@ -17,6 +17,17 @@ class Generator_CSVS_CNN(Generator_CSVS):
     Generators class to load csv files from 
     video folder structre like PCDS Dataset and
     train CNNs
+
+    Arguments (**kwargs)
+        length_t            : Length of the feature's DataFrame in time dimension
+        length_y            : Length of the feature's DataFrame in y direction
+        file_names          : File names to be processed
+        filter_cols_upper,  : Amount of columns to be filtered at end and start of DataFrame
+        filter_rows_factor  : Factor of rows to be filtered
+        batch_size          : Batch size
+        top_path            : Parent path where csv files are contained
+        label_file          : Name of the label file
+
     '''
 
     def __init__(self,*args, **kwargs):
@@ -43,6 +54,8 @@ class Generator_CSVS_CNN(Generator_CSVS):
             for file_name in self.file_names.sample(frac=1): 
                 try: 
                     df_x, label = self.__getitem__(file_name)
+                    self.file_names_processed.append(file_name)
+
                 except FileNotFoundError as e: 
                     continue
 
@@ -56,17 +69,27 @@ class Generator_CSVS_CNN(Generator_CSVS):
                     self.labels.extend(list(y_batch))
                     yield (x_batch, y_batch)
 
+    def get_file_names(self):
+        return self.file_names
+
+    def reset_file_names_processed(self): 
+        self.file_names_processed = list()
+    
+    def get_file_names_processed(self):
+        return self.file_names_processed
 
 def create_datagen(top_path, 
                    filter_rows_factor, 
-                   filter_cols, 
+                   filter_cols_upper,
+                   filter_cols_lower, 
                    batch_size, 
                    label_file): 
     '''
     '''
     length_t, length_y = get_filtered_lengths(top_path,
                                               filter_rows_factor,
-                                              filter_cols)
+                                              filter_cols_upper, 
+                                              filter_cols_lower)
 
     train_file_names, test_file_names = split_files(top_path, label_file)
     print_train_test_lengths(train_file_names, test_file_names, top_path)
@@ -74,22 +97,27 @@ def create_datagen(top_path,
     gen_train = Generator_CSVS_CNN(length_t,
                                    length_y,
                                    train_file_names,
-                                   filter_cols,
+                                   filter_cols_upper,
+                                   filter_cols_lower,
                                    filter_rows_factor,
                                    batch_size=batch_size,
                                    top_path=top_path,
                                    label_file=label_file)
+    gen_train.create_scaler()
 
     gen_test = Generator_CSVS_CNN(length_t,
                                   length_y,
                                   test_file_names,
-                                  filter_cols,
+                                  filter_cols_upper, 
+                                  filter_cols_lower,
                                   filter_rows_factor,
                                   batch_size=batch_size,
                                   top_path=top_path,
                                   label_file=label_file)
+    gen_test.create_scaler()
 
     return gen_train, gen_test
+
 
 def main(args=None):
 
@@ -97,11 +125,13 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     args = parse_args(args)    
-    length_t, length_y = get_filtered_lengths(args.top_path, args.filter_rows_factor, args.filter_cols)
+    length_t, length_y = get_filtered_lengths(args.top_path, args.filter_rows_factor,
+                                              args.filter_cols_upper, args.filter_cols_lower)
+                                              
     train_file_names, _ = split_files(args.top_path, args.label_file)
 
     gen = Generator_CSVS_CNN(length_t, length_y,
-                         train_file_names, args.filter_cols,
+                         train_file_names, args.filter_cols_upper, args.filter_cols_lower,
                          args.filter_rows_factor, batch_size=16)
 
     for _ in range(5):
