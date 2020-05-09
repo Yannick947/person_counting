@@ -8,11 +8,13 @@ import pandas as pd
 import numpy as np  
 import seaborn as sns
 import matplotlib.pyplot as plt
+from keras.models import Model
+from keras.layers import Dense, BatchNormalization, AveragePooling2D, MaxPooling2D, Input
 
 from person_counting.models import cnn_regression as cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.utils import visualization_utils as vp
+from person_counting.bin.evaluate import evaluate_model
 
 label_file = 'pcds_dataset_labels_united.csv'
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
@@ -43,13 +45,9 @@ def main():
 
 def show_feature_frames(top_path):
     #Put the params you want to visualize below in the get_best_params function
-    hparams, _, _ = get_best_hparams(top_path)
-
+    hparams, timestep_num, feature_num = get_best_hparams(top_path)
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
-                                                         filter_rows_factor=hparams['filter_rows_factor'], 
-                                                         filter_cols_upper=hparams['filter_cols_upper'],
-                                                         filter_cols_lower=hparams['filter_cols_lower'], 
-                                                         batch_size=1, 
+                                                         sample=hparams,
                                                          label_file=label_file, 
                                                          augmentation_factor=0.1)
     for datagen in [datagen_test, datagen_train]:                                                   
@@ -58,12 +56,39 @@ def show_feature_frames(top_path):
         for _ in range(10):
             with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
                 feature_frame, label = next(gen)
-                print('Label: ', datagen.scaler.scaler_labels.inverse_transform(label))
+                print('Label: ', datagen.scaler.scaler_labels.inverse_transform(label)[0])
                 ax = sns.heatmap(data=feature_frame[0, :, :, 0], vmin=0, vmax=1)
+                plt.show()
+                pool_model = create_pooling_model(hparams, timestep_num, feature_num)
+                pooled_frame = pool_model.predict(feature_frame)
+                ax = sns.heatmap(data=pooled_frame[0, :, :, 0], vmin=0)
                 plt.show()
 
 
+
+def create_pooling_model(hparams, timesteps, features): 
+    input_layer = Input(shape=((timesteps, features, 1)))
+
+    if hparams['pooling_type'] == 'avg': 
+        pooling = AveragePooling2D(pool_size=(hparams['pool_size_x'], int(features * hparams['pool_size_y_factor']))) (input_layer)
+    else:
+        pooling = MaxPooling2D(pool_size=(hparams['pool_size_x'], int(features * hparams['pool_size_y_factor']))) (input_layer)
+    
+    model = Model(inputs=input_layer, outputs=pooling)
+    model.compile(loss='mean_squared_error', optimizer='Adam')
+
+    return model
+
+
+
 def test_input_csvs(top_path):
+    ''' Test if the csv files have their proper label at the start 
+    of the training session after the data generator did the "preprocessing"
+
+    Arguments: 
+        top_path: Parent directory where shall be searched for csv files
+    '''
+
     #Put random list of ints here, files have to be verified by hand afterwards
     test_indices = [1, 13, 15, 18, 25, 39, 50, 77, 88, 99]
     batch_size = 2
@@ -84,10 +109,7 @@ def test_input_csvs(top_path):
     datagen = dgv_cnn.Generator_CSVS_CNN(length_t=timestep_num,
                                          length_y=feature_num,
                                          file_names=df_testing_csv_names,
-                                         filter_cols_upper=hparams['filter_cols_upper'],
-                                         filter_cols_lower=hparams['filter_cols_lower'],
-                                         filter_rows_factor=hparams['filter_rows_factor'],
-                                         batch_size=batch_size, 
+                                         sample=hparams,
                                          top_path=top_path,
                                          label_file=label_file)
     generator = datagen.datagen()
@@ -106,6 +128,14 @@ def test_input_csvs(top_path):
 
 
 def get_verification_labels(file_names_verify, df_verify, batch_size):
+    ''' Get verification labels from df and filters the ones needid for testing
+    Arguments: 
+        file_names_verify: File names for verfication used
+        df_verify: Dataframe with labels
+        batch_size: Batch_size for testing
+    '''
+
+    #TODO: Needs to be fixed
     entering = np.zeros(shape=batch_size)
     for i, file_name in enumerate(file_names_verify): 
         entering[i] = df_verify.loc[df_verify.file_name == file_name].iloc[:, 1].values
@@ -113,6 +143,12 @@ def get_verification_labels(file_names_verify, df_verify, batch_size):
 
 
 def get_verification_data(top_path, testing_csv_names):
+    '''Get verification labels directly from storage
+    Arguments: 
+        top_path: Parent directory where shall be searched for csvs
+        testing_csv_names: Names of of which shall be tested
+    '''
+
     df_y = pd.read_csv(top_path + label_file, header=None, names=LABEL_HEADER)
     df_verify = pd.DataFrame()
     df_verify = df_y[df_y['file_name'].apply(lambda row: any(row[-32:] in csv_file_name[-32:] for csv_file_name in testing_csv_names))]
@@ -121,13 +157,18 @@ def get_verification_data(top_path, testing_csv_names):
 
 
 def train_best(workers, multi_processing, top_path, ipython_mode): 
+    '''Train best cnn model with manually put hparams from prior tuning results
+    
+    Arguments: 
+        workers: Number of workers
+        multi_processing: Flag if multi-processing is enabled
+        top_path: Path to parent directory where csv files are stored
+        ipython_mode: If running in a jupyter notebook or colab
+    '''
     hparams, timestep_num, feature_num = get_best_hparams(top_path)
 
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
-                                                         filter_rows_factor=hparams['filter_rows_factor'], 
-                                                         filter_cols_upper=hparams['filter_cols_upper'],
-                                                         filter_cols_lower=hparams['filter_cols_lower'], 
-                                                         batch_size=hparams['batch_size'], 
+                                                         sample=hparams,
                                                          label_file=label_file)
 
     cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams)
@@ -138,41 +179,44 @@ def train_best(workers, multi_processing, top_path, ipython_mode):
                                    datagen_test,
                                    workers=workers,
                                    use_multiprocessing=multi_processing, 
-                                   epochs=15)
+                                   epochs=50)
 
-    vp.plot(history, ipython_mode=ipython_mode)
-    for gen in [datagen_train, datagen_test]:
-        vp.visualize_predictions(cnn_model, gen, ipython_mode=ipython_mode)
+    for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
+        evaluate_model(cnn_model, history, gen, mode=mode, logdir='./', visualize=True)
 
     save_path = os.path.join(top_path, '/person_counting/model_snapshots/')
     cnn_model.save('test_best{}.h5'.format(min(history.history['val_loss'])))
+    return cnn_model, history
 
 def get_best_hparams(top_path):
+    '''Set best hyperparameter set from prior tuning session
+    Arguments: 
+        top_path: Parent directory where shall be searched for csv files
+
+    '''
     hparams = {
                 'kernel_number'          : 5,
-                'batch_size'             : 32,
-                'regularization'         : 0.1,
-                'filter_cols_upper'      : 70,
-                'layer_number'           : 4,
-                'kernel_size'            : 3,
+                'batch_size'             : 1,
+                'regularization'         : 0.01,
+                'filter_cols_upper'      : 15,
+                'layer_number'           : 3,
+                'kernel_size'            : 4,
                 'filter_cols_factor'     : 1,
                 'pooling_type'           : 'avg',
                 'filter_rows_factor'     : 1,
-                'learning_rate'          : 0.00017278,
+                'learning_rate'          : 0.026459,
                 'y_stride'               : 1,
                 'optimizer'              : 'Adam',
-                'pool_size_x'            : 3,
+                'pool_size_x'            : 10,
                 'batch_normalization'    : False, 
-                'pool_size_y'            : 3,
-                'filter_cols_lower'      : 35,   
-
+                'pool_size_y'            : 2,
+                'filter_cols_lower'      : 15,
+                'augmentation_factor'    : 0,
+                'filter_rows_lower'      : 200, 
+                'pool_size_y_factor'     : 0.5, 
               }
               
-    timestep_num, feature_num = dgv.get_filtered_lengths(top_path=top_path,
-                                            filter_rows_factor=hparams['filter_rows_factor'],
-                                            filter_cols_upper=hparams['filter_cols_upper'], 
-                                            filter_cols_lower=hparams['filter_cols_lower'],
-                                            )
+    timestep_num, feature_num = dgv.get_filtered_lengths(top_path=top_path, sample=hparams)
 
     return hparams, timestep_num, feature_num
 

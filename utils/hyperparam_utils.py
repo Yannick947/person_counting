@@ -5,37 +5,41 @@ import keras
 def get_optimizer(optimizer, learning_rate=1e-4):
     '''
     '''
-    #TODO: For finetuning, more parameters (e.g momentum params) could be tuned like beta1 and beta2
+    #TODO: For finetuning, more parameters (e.g momentum params) could be tuned like beta1 and beta2 and decay
 
     if optimizer == 'RMSProp': 
-        optimizer_configured = keras.optimizers.RMSprop(learning_rate=learning_rate)
+        optimizer_configured = keras.optimizers.RMSprop(learning_rate=learning_rate, decay=learning_rate / 100)
 
     elif optimizer == 'SGD': 
-        optimizer_configured = keras.optimizers.SGD(learning_rate=learning_rate / 10, decay=3e-6)
+        optimizer_configured = keras.optimizers.SGD(learning_rate=learning_rate / 10, decay=learning_rate / 100)
 
     else: 
-        optimizer_configured = keras.optimizers.Adam(learning_rate=learning_rate, decay=3e-6)
+        optimizer_configured = keras.optimizers.Adam(learning_rate=learning_rate, decay=learning_rate / 100)
 
     return optimizer_configured
 
 
 def get_static_hparams(args): 
     '''
+    
     '''
     logging_ret = dict()
-    LOGGING_ARGS = ['batch_size',
-                    'filter_cols',
+    LOGGING_ARGS = [
+                    'filter_cols_upper',
+                    'batch_size',
                     'filter_cols_factor',
-                    'filter_rows_factor']
+                    'filter_rows_factor',
+                    'filter_cols_lower'
+                    ]
 
     for key in LOGGING_ARGS:
-        logging_ret.__setattr__(key, args[key])
+        if vars(args)[key] is not None: 
+            logging_ret[key] = vars(args)[key]
 
-    print(logging_ret)
     return logging_ret
 
 
-def create_callbacks(logdir, hparams=None): 
+def create_callbacks(logdir, hparams=None, save_best=False, reduce_on_plateau=True): 
     '''
     '''
 
@@ -45,36 +49,34 @@ def create_callbacks(logdir, hparams=None):
     callbacks = list()
     tensorboard_callback = keras.callbacks.TensorBoard(
             log_dir                = logdir,
-            update_freq            = 16, 
-            profile_batch          = 0
+            update_freq            = 128, 
+            profile_batch          = 0, 
+            write_graph            = True,
+            write_grads            = False
         )
+        
     callbacks.append(tensorboard_callback)
     callbacks.append(hp.KerasCallback(logdir, hparams))
 
+    if save_best: 
+        callbacks.append(keras.callbacks.ModelCheckpoint('best_model_{epoch:02d}_{val_loss:.2f}.hdf5',
+                                                          monitor='val_loss',
+                                                          save_best_only=True, 
+                                                          mode='min'))
+
+    if reduce_on_plateau: 
+        callbacks.append(keras.callbacks.ReduceLROnPlateau(
+            monitor    = 'val_loss',
+            factor     = 0.05,
+            patience   = 3,
+            verbose    = 1,
+            mode       = 'auto',
+            min_delta  = 0.001,
+            cooldown   = 0,
+            min_lr     = 1e-8
+        ))
+
     return callbacks
 
-def create_hyperparams_domains(): 
-    '''
-    '''
-    HP_REGULARIZER = hp.HParam('regularizer', hp.RealInterval(0.1, 0.3))
-    HP_DROPOUT = hp.HParam('dropout', hp.RealInterval(0.1, 0.2))
-    HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd']))
-    HP_KERNEL_NUMBER =  hp.HParam('kernel_number', hp.Discrete([2, 4, 8]))
-    HP_KERNEL_SIZE = hp.HParam('kernel_size', hp.Discrete([3, 5]))
-    HP_MAX_POOL_SIZE = hp.HParam('max_pool_size', hp.Discrete([2, 4]))
-
-    HP_TRAIN_LOSS = hp.Metric("loss", group="train", display_name="training loss")
-    HP_VAL_LOSS   = hp.Metric("val_loss", group="validation", display_name="validation loss")
-                                    
-    hp_domains = {'kernel_size'           : HP_KERNEL_SIZE,
-                  'dropout'               : HP_DROPOUT,
-                  'optimizer'             : HP_OPTIMIZER, 
-                  'regularizer'           : HP_REGULARIZER, 
-                  'kernel_number'         : HP_KERNEL_NUMBER,
-                  'max_pool_size'         : HP_MAX_POOL_SIZE,
-                  }
-    metrics = [HP_TRAIN_LOSS, HP_VAL_LOSS] 
-
-    return hp_domains, metrics
 
 
