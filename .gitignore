@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.csv
+*.c
+*.so
+*.jpg
+*.jpg.txt
+*.h5
+*.xml
+*.avi
+*.mp4
+*.v2
+/.pytest_cache
+/.cache
+/.WiderPerson
