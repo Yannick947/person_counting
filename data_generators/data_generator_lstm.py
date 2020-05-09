@@ -8,15 +8,18 @@ from tensorflow import keras
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
-from data_generators.data_generators import *
-from process_labels import correct_path_csv, load_labels
-from scaler import CSVScaler
-
-
+from person_counting.data_generators.data_generators import *
+from person_counting.utils.scaler import CSVScaler
 
 class Generator_CSVS_LSTM(Generator_CSVS):
+    '''
+    Generators class to load csv files from video folder structre
+    like PCDS Dataset and train LSTMs
+    '''
 
     def __init__(self,*args, **kwargs):
+        """ Initialize Generator object.
+        """
         super(Generator_CSVS_LSTM, self).__init__(*args, **kwargs)
 
 
@@ -40,7 +43,10 @@ class Generator_CSVS_LSTM(Generator_CSVS):
             for file_name in self.file_names.sample(frac=1): 
                 try: 
                     df_x, label = self.__getitem__(file_name)
+
                 except FileNotFoundError as e: 
+                    continue
+                except ValueError as e: 
                     continue
 
                 x_batch[batch_index,:,:] = df_x
@@ -54,40 +60,42 @@ class Generator_CSVS_LSTM(Generator_CSVS):
                     yield (x_batch, y_batch)
 
 
-def create_datagen(top_path=TOP_PATH): 
+def create_datagen(top_path, 
+                   sample, 
+                   label_file, 
+                   augmentation_factor=0): 
     '''
+    Creates train and test data generators for lstm network. 
+
+    Arguments: 
+        top_path: Parent directory where shall be searched for training files
+        sample: sample of hyperparameters used in this run
+        label_file: Name of the label file containing all the labels
+        augmentation_factor: Factor how much augmentation shall be done, 1 means
+                             moving every pixel for one position
     '''
-    length_t, length_y = get_filtered_lengths(top_path)
 
-    train_file_names, test_file_names = split_files()
+    length_t, length_y = get_filtered_lengths(top_path, sample)
 
-    filter_cols, filter_rows_factor = get_filters(train_file_names)
+    train_file_names, test_file_names = split_files(top_path, label_file)
+    print_train_test_lengths(train_file_names, test_file_names, top_path, label_file)
 
-    gen_train = Generator_CSVS_LSTM(length_t, length_y,
-                                    train_file_names, filter_cols, 
-                                    filter_rows_factor, batch_size=16)
+    gen_train = Generator_CSVS_LSTM(length_t,
+                                   length_y,
+                                   train_file_names,
+                                   sample=sample,
+                                   top_path=top_path,
+                                   label_file=label_file, 
+                                   augmentation_factor=augmentation_factor)
+    gen_train.create_scaler()
 
-    gen_test = Generator_CSVS_LSTM(length_t, length_y,
-                                   test_file_names, filter_cols, 
-                                   filter_rows_factor, batch_size=16)
+    gen_test = Generator_CSVS_LSTM(length_t,
+                                  length_y,
+                                  test_file_names,
+                                  sample=sample,
+                                  top_path=top_path,
+                                  label_file=label_file, 
+                                  augmentation_factor=0)
+    gen_test.create_scaler()
 
     return gen_train, gen_test
-
-
-def main():
-
-    length_t, length_y = get_filtered_lengths(TOP_PATH)
-    train_file_names, _ = split_files()
-
-    filter_cols, filter_rows = get_filters(train_file_names)
-
-    gen = Generator_CSVS(length_t, length_y,
-                         train_file_names, filter_cols,
-                         filter_rows, batch_size=16)
-
-    for _ in range(5):
-        print(next(gen.datagen))
-
-
-if __name__ == '__main__':
-    main()

@@ -1,8 +1,8 @@
 import os 
 import pandas as pd
 import numpy as np
-from random import shuffle
 import math
+from random import shuffle
 
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
@@ -50,70 +50,65 @@ class Generator_CSVS_CNN(Generator_CSVS):
         y_batch = np.zeros(shape=(self.batch_size, 1))
 
         while True:
-
-            for file_name in self.file_names.sample(frac=1): 
+            for file_name in self.file_names.sample(frac=1):
                 try: 
                     df_x, label = self.__getitem__(file_name)
-                    self.file_names_processed.append(file_name)
 
+                #Error messages for debugging purposes
                 except FileNotFoundError as e: 
+                    continue
+
+                except ValueError as e: 
                     continue
 
                 x_batch[batch_index,:,:,0] = df_x
                 y_batch[batch_index] = label
                 batch_index += 1
 
-                # Shape for x must be 3D [samples, timesteps, features] and numpy arrays
+                # Shape for x must be 4D [samples, timesteps, features, channels] and numpy array
                 if batch_index == self.batch_size:
                     batch_index = 0
                     self.labels.extend(list(y_batch))
                     yield (x_batch, y_batch)
 
-    def get_file_names(self):
-        return self.file_names
-
-    def reset_file_names_processed(self): 
-        self.file_names_processed = list()
-    
-    def get_file_names_processed(self):
-        return self.file_names_processed
 
 def create_datagen(top_path, 
-                   filter_rows_factor, 
-                   filter_cols_upper,
-                   filter_cols_lower, 
-                   batch_size, 
-                   label_file): 
+                   sample, 
+                   label_file, 
+                   augmentation_factor=0): 
     '''
+    Creates train and test data generators for cnn network. 
+
+    Arguments: 
+        top_path: Parent directory where shall be searched for training files
+        sample: sample of hyperparameters used in this run
+        label_file: Name of the label file containing all the labels
+        augmentation_factor: Factor how much augmentation shall be done, 1 means
+                             moving every pixel for one position
     '''
-    length_t, length_y = get_filtered_lengths(top_path,
-                                              filter_rows_factor,
-                                              filter_cols_upper, 
-                                              filter_cols_lower)
+
+    length_t, length_y = get_filtered_lengths(top_path, sample)
 
     train_file_names, test_file_names = split_files(top_path, label_file)
-    print_train_test_lengths(train_file_names, test_file_names, top_path)
+    print_train_test_lengths(train_file_names, test_file_names, top_path, label_file)
 
     gen_train = Generator_CSVS_CNN(length_t,
                                    length_y,
                                    train_file_names,
-                                   filter_cols_upper,
-                                   filter_cols_lower,
-                                   filter_rows_factor,
-                                   batch_size=batch_size,
+                                   sample=sample,
                                    top_path=top_path,
-                                   label_file=label_file)
+                                   label_file=label_file, 
+                                   augmentation_factor=augmentation_factor)
     gen_train.create_scaler()
 
+    #Don't do augmentation here!
     gen_test = Generator_CSVS_CNN(length_t,
                                   length_y,
                                   test_file_names,
-                                  filter_cols_upper, 
-                                  filter_cols_lower,
-                                  filter_rows_factor,
-                                  batch_size=batch_size,
+                                  sample=sample,
                                   top_path=top_path,
-                                  label_file=label_file)
+                                  label_file=label_file, 
+                                  augmentation_factor=0)
     gen_test.create_scaler()
 
     return gen_train, gen_test

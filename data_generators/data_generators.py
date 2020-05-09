@@ -11,10 +11,12 @@ from sklearn.model_selection import train_test_split
 
 from person_counting.utils import scaler
 from person_counting.models.model_argparse import parse_args
+from person_counting.data_generators import trajectory_augmentation as ta
 
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
-np.random.seed(42)
+np.random.seed(7)
+TEST_SIZE = 0.3
 
 class Generator_CSVS(keras.utils.Sequence):
     '''Abstract class for Generators to load csv files from 
@@ -26,22 +28,23 @@ class Generator_CSVS(keras.utils.Sequence):
                  length_t,
                  length_y,
                  file_names,
-                 filter_cols,
-                 filter_rows_factor,
-                 batch_size, 
+                 sample,
                  top_path,
-                 label_file): 
+                 label_file, 
+                 augmentation_factor=0): 
+
         ''' Initialize Generator object.
 
             Arguments
                 length_t            : Length of the feature's DataFrame in time dimension
                 length_y            : Length of the feature's DataFrame in y direction
                 file_names          : File names to be processed
-                filter_cols,        : Amount of columns to be filtered at end and start of DataFrame
-                filter_rows_factor  : Factor of rows to be filtered
-                batch_size          : Batch size
+                filter_cols_upper   : Amount of columns to be filtered at end and start of DataFrame
+                sample              : Sample of hyperparameter
                 top_path            : Parent path where csv files are contained
                 label_file          : Name of the label file
+                augmentation_factor : Factor how much augmentation shall be done, 1 means moving every
+                                      pixel for 1 position 
         '''
 
         self.top_path               = top_path
@@ -49,21 +52,29 @@ class Generator_CSVS(keras.utils.Sequence):
         self.length_t               = length_t
         self.length_y               = length_y
         self.file_names             = file_names 
-        self.filter_cols            = filter_cols
-        self.filter_rows_factor     = filter_rows_factor
-        self.batch_size             = batch_size
+        self.filter_cols_upper      = sample['filter_cols_upper']
+        self.filter_cols_lower      = sample['filter_cols_lower']
+        self.filter_rows_factor     = sample['filter_rows_factor']
+        self.batch_size             = sample['batch_size']
         self.labels                 = list()
-        self.scaler                 = scaler.CSVScaler(top_path, label_file, file_names)
+        self.file_names_processed   = list()
+        self.scaler                 = None
         self.df_y                   = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
+        self.augmentation_factor    = augmentation_factor
+        self.sample                 = sample 
+        self.unfiltered_length_t, self.unfiltered_length_y = get_lengths(self.top_path)
 
     @abc.abstractmethod
     def datagen(self):
         '''Returns datagenerator
         '''
         return
+    
+    def create_scaler(self, sample_size=100):
+        self.scaler = scaler.CSVScaler(self.top_path, self.label_file, self.file_names, self.sample, sample_size=sample_size)
 
     def __len__(self):
-        '''Returns the lenth of the datagen
+        '''Returns the amount of batches within all test files
         '''
         return int(np.ceil(len(self.file_names) / float(self.batch_size)))    
     
@@ -73,24 +84,45 @@ class Generator_CSVS(keras.utils.Sequence):
             file_name: The name of the file which shall be parsed
         '''
         df_x = self.__get_features(file_name)
+        if df_x is not None: 
+            if df_x.shape[0] != self.unfiltered_length_t or\
+               df_x.shape[1] != self.unfiltered_length_y:
+
+                raise ValueError ('File with wrong dimensions found')
+        else:
+                raise FileNotFoundError('Failed getting features for file {}'.format(file_name))
+
         #Only remove when index is saved in csv
         if check_for_index_col(self.top_path):
             df_x.drop(df_x.columns[0], axis=1, inplace=True)
 
-        if df_x is not None:
+        df_x = clean_ends(df_x, del_leading=self.filter_cols_upper,
+                                del_trailing=self.filter_cols_lower,
+                                del_rows=self.sample['filter_rows_lower'])
+        df_x = filter_rows(df_x, self.filter_rows_factor)
+
+        if self.augmentation_factor > 0: 
+            df_x = ta.augment_trajectory(df_x, self.augmentation_factor)
+
+        if self.scaler is not None:
             df_x = self.scaler.transform_features(df_x)
 
+        assert df_x is not None, 'Scaling or augmentation went wrong, check implementation'
+
         label = get_entering(file_name, self.df_y)
-        label = self.scaler.transform_labels(label)
 
-        if (df_x is None) or (label is None): 
-            raise FileNotFoundError('No matching csv for existing label, or scaling went wrong')
+        if self.scaler is not None:
+            label = self.scaler.transform_labels(label)
+        else: 
+            label = label.values
 
-        df_x = clean_ends(df_x, del_leading=self.filter_cols, del_trailing=self.filter_cols)
-        df_x = filter_rows(df_x, self.filter_rows_factor)
+        assert label is not None, 'Scaling for label file went wrong'
+
         assert df_x.shape[0] == (self.length_t)\
-           and df_x.shape[1] == (self.length_y) 
+           and df_x.shape[1] == (self.length_y),\
+           'Shapes or not consistent for feature dframe'
 
+        self.file_names_processed.append(file_name)
         return df_x, label
 
     def __get_features(self, file_name): 
@@ -109,7 +141,7 @@ class Generator_CSVS(keras.utils.Sequence):
             return df_x
 
         except Exception as e:
-            # print('No matching file for label found, skip')
+            # print('No matching file for label found -> skip')
             return None
 
     def get_labels(self):
@@ -122,8 +154,31 @@ class Generator_CSVS(keras.utils.Sequence):
         '''
         self.labels = list()
 
+    def get_file_names(self):
+        return self.file_names
 
-def print_train_test_lengths(train_file_names, test_file_names, args):      
+    def reset_file_names_processed(self): 
+        self.file_names_processed = list()
+    
+    def get_file_names_processed(self):
+        return self.file_names_processed
+
+        
+def get_feature_file_names(top_path): 
+    '''
+    Get names of all csv files for training
+
+    Arguments: 
+        top_path: Parent directory where to search for csv files
+    '''
+    csv_names = list()
+    for root, _, files in os.walk(top_path):
+        for file_name in files: 
+            if (file_name[-4:] == '.csv') and not ('label' in file_name): 
+                csv_names.append(os.path.join(root, file_name))
+    return csv_names
+
+def print_train_test_lengths(train_file_names, test_file_names, top_path, label_file):      
     '''Print out the length of training and test files which were loaded
     
     Arguments: 
@@ -131,12 +186,13 @@ def print_train_test_lengths(train_file_names, test_file_names, args):
         test_file_names: Names of test files
         args: Parsed args from command line
     '''  
-    csv_names = list()
-    for _, _, files in os.walk(args.top_path):
-        csv_names = csv_names.extend(files)
 
-    train_count = sum(el in csv_names for el in train_file_names)
-    test_count =  sum(el in csv_names for el in test_file_names)
+    df_y = pd.read_csv(top_path + label_file, header=None, names=LABEL_HEADER)
+    csv_names = get_feature_file_names(top_path)
+    df_y = df_y[df_y['file_name'].apply(lambda row: any(row[-32:] in csv_file_name[-32:] for csv_file_name in csv_names))]
+    test_count = int(len(df_y['file_name']) * TEST_SIZE)
+    train_count = len(df_y['file_name']) - test_count
+
     print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(train_count, test_count))
     
 
@@ -158,15 +214,15 @@ def check_for_index_col(top_path):
                 return True
 
 
-def split_files(args):
+def split_files(top_path, label_file):
     ''' Splits all files in the training set into train and test files
     and returns lists of names for train and test files
     '''
-    df_names = pd.read_csv(args.top_path + args.label_file).iloc[:,0]
+    df_names = pd.read_csv(top_path + label_file).iloc[:,0]
 
     #replace .avi with .csv
     df_names = df_names.apply(lambda row: row[:-4] + '.csv')
-    return train_test_split(df_names, test_size=0.25, random_state=42)
+    return train_test_split(df_names, test_size=TEST_SIZE, random_state=7)
             
 
 def get_filters(file_names):
@@ -213,7 +269,7 @@ def get_exiting(file_name, df_y):
     
 
 
-def clean_ends(df, del_leading=5, del_trailing=5):
+def clean_ends(df, del_leading=5, del_trailing=5, del_rows=100):
     ''' Delete leading and trailing columns due to sparsity. 
 
     Arguments: 
@@ -223,15 +279,16 @@ def clean_ends(df, del_leading=5, del_trailing=5):
         
     returns: Dataframe with cleaned columns
     '''
-
-    for i in range(del_leading):
-        df.drop(df.columns[i], axis=1, inplace=True)
+    drop_indices = [i for i in range(del_leading)]
+    df.drop(df.columns[drop_indices], axis=1, inplace=True)        
 
     col_length = df.shape[1]
-
-    for i in range(del_trailing):
-        df.drop(df.columns[col_length - i - 1], axis=1, inplace=True)
+    drop_indices = [col_length - i - 1 for i in range(del_trailing)]
+    df.drop(df.columns[drop_indices], axis=1, inplace=True)
     
+    row_length = df.shape[0]
+    drop_indices = [row_length - i - 1 for i in range(del_rows)]
+    df.drop(drop_indices, axis=0, inplace=True)
     return df
 
 
@@ -266,23 +323,25 @@ def get_lengths(top_path):
                     return df.shape[0], df.shape[1]
 
 
-def get_filtered_lengths(args):
+def get_filtered_lengths(top_path, sample):
     '''Returns the length of the feature dataframes after filtering those with 
     the above given methods
 
     Arguments: 
-        #TODO: Change args to meanningful variables
+        top_path: Path to parent directory of csv files
+        sample: Sample of hyperparameters for this run
     '''
 
-    timestep_num, feature_num = get_lengths(args.top_path)
+    timestep_num, feature_num = get_lengths(top_path)
     #TODO: Verify that the rounding is correct, maybe math.ceil() rounding in some cases has to be used
 
-    if timestep_num % args.filter_rows_factor != 0:
-        filtered_length_t = int(timestep_num / args.filter_rows_factor) + 1
+    if timestep_num % sample['filter_rows_factor'] != 0:
+        filtered_length_t = int(timestep_num / sample['filter_rows_factor']) + 1
+
     else: 
-        filtered_length_t = int(timestep_num / args.filter_rows_factor) 
+        filtered_length_t = int(timestep_num / sample['filter_rows_factor'] - sample['filter_rows_lower'])
 
-    filtered_length_y = feature_num - (2 * args.filter_cols)
-
+    filtered_length_y = feature_num - sample['filter_cols_upper'] - sample['filter_cols_lower']
+    
     return filtered_length_t, filtered_length_y
 
