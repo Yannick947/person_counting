@@ -31,6 +31,7 @@ class Generator_CSVS(keras.utils.Sequence):
                  sample,
                  top_path,
                  label_file, 
+                 scaler,
                  augmentation_factor=0): 
 
         ''' Initialize Generator object.
@@ -58,7 +59,7 @@ class Generator_CSVS(keras.utils.Sequence):
         self.batch_size             = sample['batch_size']
         self.labels                 = list()
         self.file_names_processed   = list()
-        self.scaler                 = None
+        self.scaler                 = scaler
         self.df_y                   = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
         self.augmentation_factor    = augmentation_factor
         self.sample                 = sample 
@@ -70,13 +71,12 @@ class Generator_CSVS(keras.utils.Sequence):
         '''
         return
     
-    def create_scaler(self, sample_size=100):
-        self.scaler = scaler.CSVScaler(self.top_path, self.label_file, self.file_names, self.sample, sample_size=sample_size)
-
     def __len__(self):
-        '''Returns the amount of batches within all test files
+        '''Returns the amount of batches for the generator
         '''
-        return int(np.ceil(len(self.file_names) / float(self.batch_size)))    
+        eval_batches = int(np.floor(len(self.file_names) / float(self.batch_size)))
+        print('Generator contains ', len(self.file_names), ' files with ', eval_batches, ' batches of size ', self.batch_size)
+        return eval_batches
     
     def __getitem__(self, file_name):
         '''Gets pair of features and labels for given filename
@@ -123,6 +123,7 @@ class Generator_CSVS(keras.utils.Sequence):
            'Shapes or not consistent for feature dframe'
 
         self.file_names_processed.append(file_name)
+        self.labels.append(label)
         return df_x, label
 
     def __get_features(self, file_name): 
@@ -134,14 +135,12 @@ class Generator_CSVS(keras.utils.Sequence):
             returns: Features for given file_name
         '''
 
-        full_path = os.path.join(self.top_path, file_name)
-
+        full_path = file_name
         try:
             df_x = pd.read_csv(full_path, header=None)
             return df_x
 
         except Exception as e:
-            # print('No matching file for label found -> skip')
             return None
 
     def get_labels(self):
@@ -178,23 +177,6 @@ def get_feature_file_names(top_path):
                 csv_names.append(os.path.join(root, file_name))
     return csv_names
 
-def print_train_test_lengths(train_file_names, test_file_names, top_path, label_file):      
-    '''Print out the length of training and test files which were loaded
-    
-    Arguments: 
-        train_file_names: Names of training files 
-        test_file_names: Names of test files
-        args: Parsed args from command line
-    '''  
-
-    df_y = pd.read_csv(top_path + label_file, header=None, names=LABEL_HEADER)
-    csv_names = get_feature_file_names(top_path)
-    df_y = df_y[df_y['file_name'].apply(lambda row: any(row[-32:] in csv_file_name[-32:] for csv_file_name in csv_names))]
-    test_count = int(len(df_y['file_name']) * TEST_SIZE)
-    train_count = len(df_y['file_name']) - test_count
-
-    print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(train_count, test_count))
-    
 
 def check_for_index_col(top_path): 
     '''Returns true if index column in sample csv file exists
@@ -217,12 +199,14 @@ def check_for_index_col(top_path):
 def split_files(top_path, label_file):
     ''' Splits all files in the training set into train and test files
     and returns lists of names for train and test files
+    #TODO: Split files according to the categories equally distributed
     '''
-    df_names = pd.read_csv(top_path + label_file).iloc[:,0]
+
+    df_names = pd.Series(get_feature_file_names(top_path))
 
     #replace .avi with .csv
     df_names = df_names.apply(lambda row: row[:-4] + '.csv')
-    return train_test_split(df_names, test_size=TEST_SIZE, random_state=7)
+    return train_test_split(df_names, test_size=TEST_SIZE, random_state=10)
             
 
 def get_filters(file_names):
@@ -241,8 +225,16 @@ def get_entering(file_name, df_y):
 
         returns: Label for given features
     '''
+
     try: 
-        entering = df_y.loc[df_y.file_name == file_name].entering
+        search_str = file_name.replace('\\', '/').replace('\\', '/')
+        
+        if 'front' in file_name:
+            search_str = search_str[search_str.find('front'):]
+        else: 
+            search_str = search_str[search_str.find('back'):]
+
+        entering = df_y.loc[df_y.file_name == search_str].entering
         return entering 
 
     except Exception as e:
@@ -345,3 +337,53 @@ def get_filtered_lengths(top_path, sample):
     
     return filtered_length_t, filtered_length_y
 
+def get_video_daytime(file_name): 
+    ''' Extracts daytime when video was recorded from filename
+
+    Arguments: 
+        file_name: The name of the file
+    returns hour, minutes of the video when it was recorded
+    '''
+    if file_name.find('FrontColor') != -1:
+        time_stop_pos = file_name.find('FrontColor')
+    elif file_name.find('BackColor') != -1:
+        time_stop_pos = file_name.find('BackColor')
+    
+    else:
+        raise FileNotFoundError('Not a valid file')
+     
+    hour = int(file_name[time_stop_pos - 8: time_stop_pos - 6])
+    minutes = int(file_name[time_stop_pos - 5: time_stop_pos - 3])  
+    
+    return hour, minutes
+
+def apply_file_filters(df, filter_hour_above=0, filter_category_noisy=False): 
+    '''Apply filters to the df
+    Arguments: 
+        df: Dataframe with the file names
+        filter_category_noisy: Flag if noisy videos shall be filtered
+        filter_hour_above: Hour after which the videos shall be filter
+    returns a dataframe with filtered filenames
+    '''
+
+    if filter_category_noisy: 
+        df = df[~df.str.contains("noisy")]
+    if filter_hour_above > 0: 
+        df = df[df.apply(__filter_by_hour, args=(filter_hour_above,))]
+    
+    return df
+
+def __filter_by_hour(row, filter_hour_above): 
+    '''Function to filter a row of a df with hour after specified value
+    Arguments: 
+        row: Row of the dataframe
+        filter_hour_above: Hour after which shall be filtered
+    returns True if row shall be kept, False otherwise
+    '''
+
+    file_name = row
+    hour, _ = get_video_daytime(file_name)
+    if hour > filter_hour_above: 
+        return False
+    else: 
+        return True
