@@ -50,7 +50,7 @@ class Generator_CSVS_CNN(Generator_CSVS):
         y_batch = np.zeros(shape=(self.batch_size, 1))
 
         while True:
-            for file_name in self.file_names.sample(frac=1):
+            for file_name in self.file_names:
                 try: 
                     df_x, label = self.__getitem__(file_name)
 

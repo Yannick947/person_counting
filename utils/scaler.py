@@ -12,9 +12,19 @@ from person_counting.data_generators import data_generators as dgv
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 class CSVScaler(MinMaxScaler):
+    '''Scaler to scale feature frames and corresponding labels
+    '''
     
     def __init__(self, top_path, label_file, file_names, sample, sample_size):
-
+        '''Scaler to scale feature frames and corresponding labels
+        Arguments: 
+            top_path: Path to search csv files
+            label_file: Name of the label file
+            file_names: File names to be considered for scaling
+            sample: Hyperparam sample
+            sample_size: Sample size from which shall be drawn for fitting the scaler
+        
+        '''
         self.file_names         = file_names
         self.label_file         = label_file
         self.scaler_features    = MinMaxScaler()

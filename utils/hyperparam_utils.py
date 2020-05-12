@@ -28,8 +28,9 @@ def get_static_hparams(args):
                     'filter_cols_upper',
                     'batch_size',
                     'filter_cols_factor',
-                    'filter_rows_factor',
-                    'filter_cols_lower'
+                    'filter_cols_lower', 
+                    'filter_hour_above',
+                    'filter_category_noisy',
                     ]
 
     for key in LOGGING_ARGS:
@@ -39,7 +40,7 @@ def get_static_hparams(args):
     return logging_ret
 
 
-def create_callbacks(logdir, hparams=None, save_best=False, reduce_on_plateau=True): 
+def create_callbacks(logdir, hparams=None, save_best=False, reduce_on_plateau=False): 
     '''
     '''
 

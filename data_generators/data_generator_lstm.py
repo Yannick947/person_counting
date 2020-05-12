@@ -40,7 +40,7 @@ class Generator_CSVS_LSTM(Generator_CSVS):
 
         while True:
 
-            for file_name in self.file_names.sample(frac=1): 
+            for file_name in self.file_names: 
                 try: 
                     df_x, label = self.__getitem__(file_name)
 
@@ -63,7 +63,9 @@ class Generator_CSVS_LSTM(Generator_CSVS):
 def create_datagen(top_path, 
                    sample, 
                    label_file, 
-                   augmentation_factor=0): 
+                   augmentation_factor=0, 
+                   filter_hour_above=0, 
+                   filter_category_noisy=False): 
     '''
     Creates train and test data generators for lstm network. 
 
@@ -73,11 +75,17 @@ def create_datagen(top_path,
         label_file: Name of the label file containing all the labels
         augmentation_factor: Factor how much augmentation shall be done, 1 means
                              moving every pixel for one position
+        filter_hour_above: Hour after which videos shall be filtered
+        filter_category_noisy: Flag if noisy videos shall be filtered
     '''
-
+    #Load filenames and lengths
     length_t, length_y = get_filtered_lengths(top_path, sample)
-
     train_file_names, test_file_names = split_files(top_path, label_file)
+
+    #Apply filters
+    train_file_names = apply_file_filters(train_file_names, filter_hour_above, filter_category_noisy)
+    test_file_names = apply_file_filters(test_file_names, filter_hour_above, filter_category_noisy)
+
     print_train_test_lengths(train_file_names, test_file_names, top_path, label_file)
 
     gen_train = Generator_CSVS_LSTM(length_t,

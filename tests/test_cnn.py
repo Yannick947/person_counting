@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np  
 import seaborn as sns
 import matplotlib.pyplot as plt
+import cv2 as cv
 from keras.models import Model
 from keras.layers import Dense, BatchNormalization, AveragePooling2D, MaxPooling2D, Input
 
@@ -21,25 +22,25 @@ LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 def main():
     if sys.argv[1] == 'train_best_cpu': 
-        top_path = 'C:/Users/Yannick/Google Drive/person_detection/bus_videos/pcds_dataset_detected/'
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 1
         multi_processing = False
         ipython_mode = False
-        train_best(workers, multi_processing, top_path, ipython_mode)
+        train_best(workers, multi_processing, top_path, ipython_mode, epochs=2)
 
     elif sys.argv[1] == 'train_best_gpu':
-        top_path = '/content/drive/My Drive/person_detection/bus_videos/pcds_dataset_detected/'
+        top_path = '/content/drive/My Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 16
         multi_processing = True
         ipython_mode = True
-        train_best(workers, multi_processing, top_path, ipython_mode)
+        train_best(workers, multi_processing, top_path, ipython_mode, epochs=25)
 
     elif sys.argv[1] == 'test_input_csvs':
-        top_path = 'C:/Users/Yannick/Google Drive/person_detection/bus_videos/pcds_dataset_detected/'
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         test_input_csvs(top_path)
 
     elif sys.argv[1] == 'show_feature_frames':
-        top_path = 'C:/Users/Yannick/Google Drive/person_detection/bus_videos/pcds_dataset_detected/'
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         show_feature_frames(top_path)
 
 
@@ -49,19 +50,36 @@ def show_feature_frames(top_path):
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                          sample=hparams,
                                                          label_file=label_file, 
-                                                         augmentation_factor=0.1)
+                                                         augmentation_factor=0.1, 
+                                                         filter_hour_above=16, 
+                                                         filter_category_noisy=True)
     for datagen in [datagen_test, datagen_train]:                                                   
         gen = datagen.datagen()
         sns.set()
-        for _ in range(10):
+        for _ in range(8):
             with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
+                datagen.reset_file_names_processed() 
                 feature_frame, label = next(gen)
+                file_names = datagen.get_file_names_processed()
+                daytime = dgv_cnn.get_video_daytime(file_names[0])
+
+                print('Video name: ', file_names[0])
                 print('Label: ', datagen.scaler.scaler_labels.inverse_transform(label)[0])
-                ax = sns.heatmap(data=feature_frame[0, :, :, 0], vmin=0, vmax=1)
-                plt.show()
+                print('Daytime of video: ', daytime[0], ':', daytime[1], '\n')
+
+                fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(8, 4))
+                sns.heatmap(data=feature_frame[0, :, :, 0], vmin=0, vmax=1, ax=ax1)
+                
+                kernel = np.ones((2,3), np.uint8)
+                opening = cv.dilate(feature_frame[0, :, :, 0], kernel)
+                kernel = np.ones((2,2), np.uint8)
+                opening = cv.erode(opening, kernel)
+                sns.heatmap(data=opening, ax=ax2)
+
                 pool_model = create_pooling_model(hparams, timestep_num, feature_num)
                 pooled_frame = pool_model.predict(feature_frame)
-                ax = sns.heatmap(data=pooled_frame[0, :, :, 0], vmin=0)
+                sns.heatmap(data=pooled_frame[0, :, :, 0], vmin=0, ax=ax3)
+
                 plt.show()
 
 
@@ -70,9 +88,9 @@ def create_pooling_model(hparams, timesteps, features):
     input_layer = Input(shape=((timesteps, features, 1)))
 
     if hparams['pooling_type'] == 'avg': 
-        pooling = AveragePooling2D(pool_size=(hparams['pool_size_x'], int(features * hparams['pool_size_y_factor']))) (input_layer)
+        pooling = AveragePooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y'])) (input_layer)
     else:
-        pooling = MaxPooling2D(pool_size=(hparams['pool_size_x'], int(features * hparams['pool_size_y_factor']))) (input_layer)
+        pooling = MaxPooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y'])) (input_layer)
     
     model = Model(inputs=input_layer, outputs=pooling)
     model.compile(loss='mean_squared_error', optimizer='Adam')
@@ -156,7 +174,7 @@ def get_verification_data(top_path, testing_csv_names):
     return df_verify 
 
 
-def train_best(workers, multi_processing, top_path, ipython_mode): 
+def train_best(workers, multi_processing, top_path, ipython_mode, epochs=25): 
     '''Train best cnn model with manually put hparams from prior tuning results
     
     Arguments: 
@@ -171,7 +189,7 @@ def train_best(workers, multi_processing, top_path, ipython_mode):
                                                          sample=hparams,
                                                          label_file=label_file)
 
-    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams)
+    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.scaler.scaler_labels.scale_)
     history, cnn_model = cnn.train(cnn_model,
                                    datagen_train,
                                    './',
@@ -179,7 +197,7 @@ def train_best(workers, multi_processing, top_path, ipython_mode):
                                    datagen_test,
                                    workers=workers,
                                    use_multiprocessing=multi_processing, 
-                                   epochs=50)
+                                   epochs=epochs)
 
     for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
         evaluate_model(cnn_model, history, gen, mode=mode, logdir='./', visualize=True)
@@ -196,24 +214,25 @@ def get_best_hparams(top_path):
     '''
     hparams = {
                 'kernel_number'          : 5,
-                'batch_size'             : 1,
-                'regularization'         : 0.01,
-                'filter_cols_upper'      : 15,
-                'layer_number'           : 3,
+                'batch_size'             : 32,
+                'regularization'         : 0.1,
+                'filter_cols_upper'      : 35,
+                'layer_number'           : 1,
                 'kernel_size'            : 4,
                 'filter_cols_factor'     : 1,
-                'pooling_type'           : 'avg',
+                'pooling_type'           : 'max',
                 'filter_rows_factor'     : 1,
-                'learning_rate'          : 0.026459,
+                'learning_rate'          : 0.0029459,
                 'y_stride'               : 1,
                 'optimizer'              : 'Adam',
-                'pool_size_x'            : 10,
-                'batch_normalization'    : False, 
+                'pool_size_x'            : 2,
                 'pool_size_y'            : 2,
-                'filter_cols_lower'      : 15,
+                'batch_normalization'    : False, 
+                'filter_cols_lower'      : 25,
                 'augmentation_factor'    : 0,
-                'filter_rows_lower'      : 200, 
-                'pool_size_y_factor'     : 0.5, 
+                'filter_rows_lower'      : 150, 
+                'pool_size_y_factor'     : 0.01, 
+                'units'                  : 5,
               }
               
     timestep_num, feature_num = dgv.get_filtered_lengths(top_path=top_path, sample=hparams)

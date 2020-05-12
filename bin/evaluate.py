@@ -4,9 +4,10 @@ import statistics
 import numpy as np 
 from keras.models import load_model
 import tensorflow as tf
+import pandas as pd
 
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
-
+from person_counting.data_generators.data_generators import get_entering
 
 def evaluate_model(model, history, gen, mode, logdir, visualize=True):
 
@@ -17,6 +18,7 @@ def evaluate_model(model, history, gen, mode, logdir, visualize=True):
     evaluate_predictions(history, pred_test, y_true_test, model=model, visualize=visualize, mode=mode)
     mean_difference, mean_difference_dummy, _ = get_stats(y_true_test, pred_test)
     write_custom_metrics(mean_difference, mean_difference_dummy, logdir)
+
 
 def write_custom_metrics(mean_difference, mean_difference_dummy, logdir):
     try:
@@ -71,16 +73,12 @@ def get_stats(y_true, predictions):
 
 def create_mae_rescaled(scale_factor):
 
-    def lossFunction(y_true, y_pred):    
-        difference = 0
+    def mae_rescaled(y_true, y_pred):    
+        difference = abs(y_pred - y_true)
+        return difference / scale_factor
 
-        for prediction, y in zip(y_pred, y_true):
-            difference += abs(prediction - y)
-    
-        mean_difference_pred = difference / len(y_pred)
-        return mean_difference_pred * scale_factor
+    return mae_rescaled
 
-    return lossFunction
 
 def get_predictions(model, gen): 
     '''Generate predictions from generator and model
@@ -93,8 +91,23 @@ def get_predictions(model, gen):
     gen.reset_label_states()
     gen.reset_file_names_processed()
     gen.batch_size = 1
+    df_y = pd.read_csv(gen.label_file)
+    labels = list()
+    feature_frames = list()
 
-    predictions = model.predict_generator(generator=gen.datagen(), steps=len(gen))
+    for file_name in gen.file_names: 
+        x = pd.read_csv(file_name)
+        labels.append(get_entering(file_name, df_y))
+        x = preoprocessing(x)
+    pred = model.predict(x)
+        if gen.scaler is not None: 
+            predictions_inverse = gen.scaler.scaler_labels.inverse_transform(predictions)
+            y_true = gen.scaler.scaler_labels.inverse_transform(gen.get_labels())
+    
+    
+    
+    print(model.evaluate_generator(generator=gen.datagen(), steps=len(gen), workers=1, verbose=0))
+    predictions = model.predict_generator(generator=gen.datagen(), steps=len(gen), workers=1, use_multiprocessing=False)
     if gen.scaler is not None: 
         predictions_inverse = gen.scaler.scaler_labels.inverse_transform(predictions)
         y_true = gen.scaler.scaler_labels.inverse_transform(gen.get_labels())
