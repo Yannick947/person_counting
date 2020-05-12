@@ -10,6 +10,7 @@ __pycache__/
 *.avi
 *.mp4
 *.v2
+events.*
 /.pytest_cache
 /.cache
 /.WiderPerson
