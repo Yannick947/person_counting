@@ -18,7 +18,7 @@ def time_measure(method):
 
 #For testing the performance, comment in the decorator to measure time for execution
 @time_measure
-def augment_trajectory(df, aug_factor=0.3): 
+def augment_trajectory(df, aug_factor=0.1): 
     '''Augment a trajectory by moving certain pixels which are detections
     into random directions
     '''
@@ -45,8 +45,8 @@ def get_destination(df, old_position, indices):
         y = old_position[1] + direction[1]
         new_pos = (x, y)
 
-        if (new_pos[0] < 0) or (new_pos[0] > df.shape[0])\
-        or (new_pos[1] < 0) or (new_pos[1] > df.shape[1]):
+        if (new_pos[0] < 0) or (new_pos[0] >= df.shape[0])\
+        or (new_pos[1] < 0) or (new_pos[1] >= df.shape[1]):
             continue
 
         if new_pos not in indices:

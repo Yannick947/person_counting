@@ -5,8 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         
-
-
         {
             "name": "data_generator_videos as module",
             "type": "python",
@@ -43,6 +41,21 @@
             "module": "person_counting.tests.test_cnn",
             "cwd": "C:/Users/Yannick/Google Drive/",
             "args": ["show_feature_frames"],
-        }
+        },
+        {
+            "name": "augmentation test",
+            "type": "python",
+            "request": "launch",
+            "module": "person_counting.data_generators.trajectory_augmentation",
+            "cwd": "C:/Users/Yannick/Google Drive/",
+        },
+        {
+            "name": "cnn_regression train best cpu",
+            "type": "python",
+            "request": "launch",
+            "module": "person_counting.tests.test_cnn",
+            "cwd": "C:/Users/Yannick/Google Drive/",
+            "args": ["train_best_cpu"],
+        },
     ]
 }
