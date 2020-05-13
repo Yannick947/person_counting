@@ -16,6 +16,9 @@ from person_counting.models import cnn_regression as cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.bin.evaluate import evaluate_model
+from person_counting.utils.preprocessing import get_filtered_lengths
+from person_counting.utils.preprocessing import get_video_daytime
+
 
 label_file = 'pcds_dataset_labels_united.csv'
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
@@ -25,15 +28,13 @@ def main():
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 1
         multi_processing = False
-        ipython_mode = False
-        train_best(workers, multi_processing, top_path, ipython_mode, epochs=2)
+        train_best(workers, multi_processing, top_path, epochs=0)
 
     elif sys.argv[1] == 'train_best_gpu':
         top_path = '/content/drive/My Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 16
         multi_processing = True
-        ipython_mode = True
-        train_best(workers, multi_processing, top_path, ipython_mode, epochs=25)
+        train_best(workers, multi_processing, top_path, epochs=12)
 
     elif sys.argv[1] == 'test_input_csvs':
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
@@ -61,7 +62,7 @@ def show_feature_frames(top_path):
                 datagen.reset_file_names_processed() 
                 feature_frame, label = next(gen)
                 file_names = datagen.get_file_names_processed()
-                daytime = dgv_cnn.get_video_daytime(file_names[0])
+                daytime = get_video_daytime(file_names[0])
 
                 print('Video name: ', file_names[0])
                 print('Label: ', datagen.scaler.scaler_labels.inverse_transform(label)[0])
@@ -83,7 +84,6 @@ def show_feature_frames(top_path):
                 plt.show()
 
 
-
 def create_pooling_model(hparams, timesteps, features): 
     input_layer = Input(shape=((timesteps, features, 1)))
 
@@ -96,7 +96,6 @@ def create_pooling_model(hparams, timesteps, features):
     model.compile(loss='mean_squared_error', optimizer='Adam')
 
     return model
-
 
 
 def test_input_csvs(top_path):
@@ -174,14 +173,13 @@ def get_verification_data(top_path, testing_csv_names):
     return df_verify 
 
 
-def train_best(workers, multi_processing, top_path, ipython_mode, epochs=25): 
+def train_best(workers, multi_processing, top_path, epochs=25): 
     '''Train best cnn model with manually put hparams from prior tuning results
     
     Arguments: 
         workers: Number of workers
         multi_processing: Flag if multi-processing is enabled
         top_path: Path to parent directory where csv files are stored
-        ipython_mode: If running in a jupyter notebook or colab
     '''
     hparams, timestep_num, feature_num = get_best_hparams(top_path)
 
@@ -200,7 +198,7 @@ def train_best(workers, multi_processing, top_path, ipython_mode, epochs=25):
                                    epochs=epochs)
 
     for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
-        evaluate_model(cnn_model, history, gen, mode=mode, logdir='./', visualize=True)
+        evaluate_model(cnn_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
 
     save_path = os.path.join(top_path, '/person_counting/model_snapshots/')
     cnn_model.save('test_best{}.h5'.format(min(history.history['val_loss'])))
@@ -235,7 +233,7 @@ def get_best_hparams(top_path):
                 'units'                  : 5,
               }
               
-    timestep_num, feature_num = dgv.get_filtered_lengths(top_path=top_path, sample=hparams)
+    timestep_num, feature_num = get_filtered_lengths(top_path=top_path, sample=hparams)
 
     return hparams, timestep_num, feature_num
 
