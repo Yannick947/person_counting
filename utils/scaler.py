@@ -8,13 +8,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 from person_counting.data_generators import data_generators as dgv
-
+from person_counting.utils import preprocessing as pp
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 class CSVScaler(MinMaxScaler):
     '''Scaler to scale feature frames and corresponding labels
     '''
-    
+
     def __init__(self, top_path, label_file, file_names, sample, sample_size):
         '''Scaler to scale feature frames and corresponding labels
         Arguments: 
@@ -33,7 +33,7 @@ class CSVScaler(MinMaxScaler):
         self.sample_size        = sample_size
         self.sample             = sample
 
-        self.unfiltered_length_t, self.unfiltered_length_y = dgv.get_lengths(self.top_path)
+        self.unfiltered_length_t, self.unfiltered_length_y = pp.get_lengths(self.top_path)
 
         self.fit_scalers()
 
@@ -66,7 +66,7 @@ class CSVScaler(MinMaxScaler):
             except: 
                 continue
 
-            df = dgv.clean_ends(df,
+            df = pp.clean_ends(df,
                                 self.sample['filter_cols_upper'],
                                 self.sample['filter_cols_lower'],
                                 self.sample['filter_rows_lower'])    
