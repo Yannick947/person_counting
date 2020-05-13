@@ -1,5 +1,6 @@
 import math
 import statistics
+import os
 
 import numpy as np 
 from keras.models import load_model
@@ -9,32 +10,105 @@ import pandas as pd
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
 from person_counting.data_generators.data_generators import get_entering
 
-def evaluate_model(model, history, gen, mode, logdir, visualize=True):
+LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
+
+def evaluate_model(model, history, gen, mode, logdir, top_path, visualize=True):
 
     if type(model) == list:
         model = load_model(model) 
     
-    pred_test, y_true_test = get_predictions(model, gen)
-    evaluate_predictions(history, pred_test, y_true_test, model=model, visualize=visualize, mode=mode)
-    mean_difference, mean_difference_dummy, _ = get_stats(y_true_test, pred_test)
-    write_custom_metrics(mean_difference, mean_difference_dummy, logdir)
+    y_pred, y_pred_orig, y_true, y_true_orig = get_predictions(model, gen, top_path)
+    evaluate_predictions(history, y_pred, y_pred_orig,
+                         y_true, y_true_orig, model=model,
+                         visualize=visualize, mode=mode, 
+                         logdir=logdir)
 
 
-def write_custom_metrics(mean_difference, mean_difference_dummy, logdir):
-    try:
-        file_writer = tf.summary.create_file_writer(logdir)
-        file_writer.set_as_default()
-        tf.summary.scalar('mean_difference', tf.squeeze(float(mean_difference)))
-        tf.summary.scalar('mean_difference_dummy', tf.squeeze(float(mean_difference_dummy)))
-    except: 
-        print('failed writing summary for evaluation')
-        
-def evaluate_predictions(history, predictions, y_true, visualize, mode, model, ipython_mode=True):
-    print_stats(predictions, y_true, mode)
+def evaluate_predictions(history, y_pred, y_pred_orig,
+                         y_true, y_true_orig, visualize,
+                         mode, model, logdir=None):
+    '''Evaluate predictions
+    '''
+
+    print_stats(y_pred_orig, y_true_orig, mode)
+
     if visualize == True:
-        plot_losses(history, ipython_mode)
-        visualize_predictions(predictions, y_true, ipython_mode=ipython_mode)
-        visualize_filters(model)
+        plot_losses(history, logdir=logdir)
+        visualize_predictions(y_pred_orig, y_true_orig, logdir=logdir)
+        visualize_filters(model, logdir=logdir)
+
+
+def get_stats(y_true, predictions):
+    difference = 0
+    difference_dummy = 0
+    mean_ground_truth = sum(y_true) / len(y_true)
+
+    for prediction, y in zip(predictions, y_true):
+        difference += abs(prediction - y)
+        difference_dummy += abs(mean_ground_truth - y)
+    
+    mean_difference_pred = difference / len(predictions)
+    mean_difference_dummy = difference_dummy / len(y_true)
+
+    return mean_difference_pred, mean_difference_dummy, mean_ground_truth
+
+
+def create_mae_rescaled(scale_factor):
+    '''Create a callback function which tracks mae rescaled
+    Arguments: 
+        scale_factor: Scaling factor with which the labels were scaled initially
+    '''
+    def mae_rescaled(y_true, y_pred):    
+        difference = abs(y_pred - y_true)
+        return difference / scale_factor
+
+    return mae_rescaled
+
+
+def get_predictions(model, gen, top_path): 
+    '''Generate predictions from generator and model
+
+    Arguments: 
+        model: Model which shall predict
+        gen: Generator to load data
+    returns predictions and corresponding ground_truth
+    '''
+    gen.reset_label_states()
+    gen.reset_file_names_processed()
+    gen.batch_size = 1
+
+    y_true = list()
+    feature_frames = list()
+    y_true_orig = list()
+    
+    df_y = pd.read_csv(os.path.join(top_path, gen.label_file), header=None, names=LABEL_HEADER)
+
+    for file_name in gen.file_names: 
+        try: 
+            x = pd.read_csv(file_name, header=None)
+            x = gen.preprocessor.preprocess_features(x)
+
+            y = get_entering(file_name, df_y)
+            y_true_orig.append(y.values[0])
+            y_processed = np.copy(gen.preprocessor.preprocess_labels(y))
+
+            y_true.append(y_processed[0])
+            feature_frames.append(x)
+        except: 
+            print('Failed reading feature file for ', file_name)
+            continue
+
+    #Reshape features
+    feature_frames = np.dstack(feature_frames)
+    feature_frames = np.moveaxis(feature_frames, 2, 0)[..., np.newaxis]
+
+    print(model.evaluate(x=feature_frames, y=np.array(y_true)))
+    y_pred = model.predict(feature_frames)
+
+    y_pred_orig = gen.scaler.scaler_labels.inverse_transform(y_pred)
+    
+    return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig)
+    
 
 def print_stats(predictions, y_true, mode):
     '''Print stats of predictions and ground_truth
@@ -53,75 +127,5 @@ def print_stats(predictions, y_true, mode):
     print('Mean of predictions: ', sum(predictions) / len(predictions))
     print('\nStd of ground truth: ', np.std(y_true))
     print('Std of predicitons: ', np.std(predictions))
-    print('\nMean difference between Ground truth and predictions is: ', mean_difference)
-    print('Mean of dummy estimator, voting for mean of ground truth: ', mean_difference_dummy)
-
-def get_stats(y_true, predictions):
-    difference = 0
-    difference_dummy = 0
-    mean_ground_truth = sum(y_true) / len(y_true)
-
-    for prediction, y in zip(predictions, y_true):
-        difference += abs(prediction - y)
-        difference_dummy += abs(mean_ground_truth - y)
-    
-    mean_difference_pred = difference / len(predictions)
-    mean_difference_dummy = difference_dummy / len(y_true)
-
-    return mean_difference_pred, mean_difference_dummy, mean_ground_truth
-
-
-def create_mae_rescaled(scale_factor):
-
-    def mae_rescaled(y_true, y_pred):    
-        difference = abs(y_pred - y_true)
-        return difference / scale_factor
-
-    return mae_rescaled
-
-
-def get_predictions(model, gen): 
-    '''Generate predictions from generator and model
-
-    Arguments: 
-        model: Model which shall predict
-        gen: Generator to load data
-    returns predictions and corresponding ground_truth
-    '''
-    gen.reset_label_states()
-    gen.reset_file_names_processed()
-    gen.batch_size = 1
-    df_y = pd.read_csv(gen.label_file)
-    labels = list()
-    feature_frames = list()
-
-    for file_name in gen.file_names: 
-        x = pd.read_csv(file_name)
-        labels.append(get_entering(file_name, df_y))
-        x = preoprocessing(x)
-    pred = model.predict(x)
-        if gen.scaler is not None: 
-            predictions_inverse = gen.scaler.scaler_labels.inverse_transform(predictions)
-            y_true = gen.scaler.scaler_labels.inverse_transform(gen.get_labels())
-    
-    
-    
-    print(model.evaluate_generator(generator=gen.datagen(), steps=len(gen), workers=1, verbose=0))
-    predictions = model.predict_generator(generator=gen.datagen(), steps=len(gen), workers=1, use_multiprocessing=False)
-    if gen.scaler is not None: 
-        predictions_inverse = gen.scaler.scaler_labels.inverse_transform(predictions)
-        y_true = gen.scaler.scaler_labels.inverse_transform(gen.get_labels())
-        if len(y_true) != len(predictions): 
-            print('Length of predictions and ground truth doesnt match!')
-            y_true = y_true[:len(predictions_inverse)]
-        print('Number of test samples for evaluation', len(predictions))
-        print('Number of unique files used for evaluation, ', len(set(gen.get_file_names_processed())))
-        return predictions_inverse, y_true
-
-    else: 
-        y_true = gen.get_labels()
-        if len(y_true) != len(predictions): 
-            y_true = y_true[:len(predictions_inverse)]
-        print('No scaler found, calculations done on data given')
-        return predictions, y_true
-
+    print('\nMean difference between ground truth and predictions is: ', mean_difference)
+    print('Mean difference between dummy estimator (voting always for mean of ground truth) and ground truth: ', mean_difference_dummy)
