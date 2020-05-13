@@ -9,7 +9,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 from person_counting.data_generators.data_generators import *
+from person_counting.utils.preprocessing import get_filtered_lengths
 from person_counting.utils.scaler import CSVScaler
+from person_counting.utils.preprocessing import apply_file_filters
+
 
 class Generator_CSVS_LSTM(Generator_CSVS):
     '''
