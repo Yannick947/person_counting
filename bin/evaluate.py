@@ -12,10 +12,21 @@ from person_counting.data_generators.data_generators import get_entering
 
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
-def evaluate_model(model, history, gen, mode, logdir, top_path, visualize=True):
+def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
+    ''' Evaluate a run of certain hyperparameters
+    Arguments: 
+        model: Last model which was created during training
+        history: Keras history object which was created during training
+        gen: Generator for data
+        mode: Mode (training or testing)
+        logdir: Directory where logging is done
+        top_path: Parent directory where is logged to 
+        visualize: Flag indicating if plots shall be created and saved
+    '''
 
-    if type(model) == list:
-        model = load_model(model) 
+    #Search for best model in logdir if existing
+    model = parse_model(model, logdir)
+    model.compile(optimizer='adam', loss=create_mae_rescaled(gen.scaler.scaler_labels.scale_))
     
     y_pred, y_pred_orig, y_true, y_true_orig = get_predictions(model, gen, top_path)
     evaluate_predictions(history, y_pred, y_pred_orig,
@@ -23,22 +34,53 @@ def evaluate_model(model, history, gen, mode, logdir, top_path, visualize=True):
                          visualize=visualize, mode=mode, 
                          logdir=logdir)
 
+def parse_model(model, logdir):
+    ''' Parse logdir for best model
+    Arguments: 
+        model: Last model during training
+        logdir: Path to directory where best model might be stored
+    returns best Keras model during training, if not existent, returns 
+            last model during training
+    '''
+
+    for root, _, files in os.walk(logdir):
+        for file_name in files: 
+            if file_name[-5:] == '.hdf5': 
+                print('\nLoading best model within this training ...')
+                model = load_model(os.path.join(root, file_name), custom_objects={'tf': tf}, compile=False) 
+                return model
+    return model
+
 
 def evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, visualize,
-                         mode, model, logdir=None):
-    '''Evaluate predictions
+                         model, mode='Test', logdir=None):
+    '''Evaluate predictions of the best model
+    Arguments: 
+        history: Keras history object created during training 
+        y_pred: Predictions 
+        y_pred_orig: Predictions retransformed
+        y_true: Ground truth 
+        y_true_orig: Ground truth retransformed
+        visualize: Flag indicating if visualization shall be done
+        mode: Mode ('Train', or 'Test')
+        model: Last model created during training
+        logdir: Directory where logging is done
+
     '''
 
     print_stats(y_pred_orig, y_true_orig, mode)
 
     if visualize == True:
-        plot_losses(history, logdir=logdir)
-        visualize_predictions(y_pred_orig, y_true_orig, logdir=logdir)
+        visualize_predictions(y_pred_orig, y_true_orig, mode=mode, logdir=logdir)
         visualize_filters(model, logdir=logdir)
+        plot_losses(history, logdir=logdir)
 
 
 def get_stats(y_true, predictions):
+    '''Gets stats for GT and predictions
+    '''
+
     difference = 0
     difference_dummy = 0
     mean_ground_truth = sum(y_true) / len(y_true)
