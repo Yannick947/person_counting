@@ -1,12 +1,14 @@
 import sys
-import pandas as pd
 import os
 from time import gmtime, strftime
 
 import tensorflow as tf
 import keras
-
-from keras.layers import Dense, MaxPooling2D, Conv2D, Flatten, BatchNormalization, AveragePooling2D, Reshape, LSTM, Layer, Lambda, Input
+import pandas as pd
+import numpy as np
+from keras import Model
+from keras.layers import (Dense, MaxPooling2D, Conv2D, Flatten, BatchNormalization,
+                          AveragePooling2D, Reshape, LSTM, Layer, Lambda, Input)
 from sklearn.model_selection import ParameterSampler
 from scipy.stats import loguniform
 
@@ -15,7 +17,8 @@ from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
 from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
 from person_counting.models.model_argparse import parse_args
-from person_counting.bin.evaluate import evaluate_model, create_mae_rescaled
+from person_counting.bin.evaluate import evaluate_run, create_mae_rescaled
+from person_counting.utils.preprocessing import get_filtered_lengths
 
 
 def main(args=None):
@@ -27,7 +30,7 @@ def main(args=None):
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
-        timestep_num, feature_num = dgv.get_filtered_lengths(args.top_path, sample)
+        timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
 
         datagen_train, datagen_test = dgv_cnn.create_datagen(args.top_path,
                                                              sample,
@@ -48,8 +51,8 @@ def main(args=None):
                               datagen_test=datagen_test,
                               epochs=args.epochs)
 
-        evaluate_model(model, history, datagen_test,  mode='test', logdir=logdir, visualize=False)
-        evaluate_model(model, history, datagen_train, mode='train', logdir=logdir, visualize=False)
+        evaluate_run(model, history, datagen_test,  mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
+        evaluate_run(model, history, datagen_train, mode='train', logdir=logdir, visualize=True, top_path=args.top_path)
 
 
 def get_samples(args):
@@ -65,23 +68,24 @@ def get_samples(args):
     param_grid = {
                   'pooling_type'        : ['avg', 'max'],
                   'kernel_size'         : [i for i in range(3, 5)],
-                  'kernel_number'       : [i for i in range(3,7)],
+                  'kernel_number'       : [i for i in range(3,10)],
                   'pool_size_y'         : [2],
                   'pool_size_x'         : [2],
-                  'learning_rate'       : loguniform.rvs(a=1e-4, b=1e-2, size=100000),
-                  'optimizer'           : ['Adam', 'Adam', 'SGD'], 
+                  'learning_rate'       : loguniform.rvs(a=5e-4, b=1e-2, size=100000),
+                  'optimizer'           : ['Adam', 'AdaGrad', 'Nadam'], 
                   'layer_number'        : [1, 2, 3], 
                   'batch_normalization' : [False],
-                  'regularization'      : [0], 
-                  'filter_rows_lower'   : [150], 
-                  'filter_cols_upper'   : [35], 
-                  'filter_cols_lower'   : [25],
+                  'regularization'      : [i/20 for i in range(20)], 
+                  'filter_rows_lower'   : [i for i in range(150)], 
+                  'filter_cols_upper'   : [i for i in range(5, 30)], 
+                  'filter_cols_lower'   : [i for i in range(5, 25)],
                   'filter_rows_factor'  : [1],
-                  'batch_size'          : [32], 
-                  'units'               : [i for i in range(3,7)],
+                  'batch_size'          : [32, 64, 128], 
+                  'units'               : [i for i in range(2,7)],
+                  'loss'                : ['msle', 'mse', 'mae']
                 }
 
-    dynamic_params = list(ParameterSampler(param_grid, n_iter=args.n_runs))
+    dynamic_params = list(ParameterSampler(param_grid, n_iter=args.n_runs, random_state=int(np.random.randint(10, size=1))))
     static_params = get_static_hparams(args)
 
     return [{**dp, **static_params} for dp in dynamic_params]
@@ -123,7 +127,7 @@ def train(model,
                                   epochs=epochs,
                                   verbose=1,
                                   shuffle=True,
-                                  callbacks=create_callbacks(logdir, hparams, save_best=False), 
+                                  callbacks=create_callbacks(logdir, hparams, save_best=True), 
                                   use_multiprocessing=use_multiprocessing, 
                                   workers=workers, 
                                   max_queue_size=16,
@@ -143,30 +147,28 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
         returns keras model with cnn architecture
     '''
 
-    conv_layer = Conv2D(hparams['kernel_number'],
-                        hparams['kernel_size'],
-                        use_bias=True,
-                        activation='relu', 
-                        kernel_initializer=keras.initializers.glorot_normal())
-                          
+    def create_conv_layer():
+        return Conv2D(hparams['kernel_number'],
+                    hparams['kernel_size'],
+                    use_bias=True,
+                    activation='relu', 
+                    kernel_initializer=keras.initializers.glorot_normal(), 
+                    padd)
+
     if hparams['pooling_type'] == 'avg': 
-        pooling_layer =  AveragePooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']))
-    else: 
-        pooling_layer = MaxPooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']))
+        def create_pool_layer():
+            return AveragePooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']))
+    else:
+        def create_pool_layer():
+            return MaxPooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']))
 
-
-    #Create the model architecture
-    model = keras.Sequential()
-    model.add(AveragePooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']),
-                               input_shape=(timesteps, features, 1)))
+    layers = list()
+    layers.append(Input(shape=(timesteps, features, 1)))
 
     for _ in range(hparams['layer_number']):
         try:
-            if hparams['batch_normalization']: 
-                model.add(BatchNormalization())
-
-            model.add(conv_layer) 
-            model.add(pooling_layer)
+            layers.append(create_conv_layer()(layers[-1]))
+            layers.append(create_pool_layer()(layers[-1]))
 
         except ValueError:
             #Creation failed, hparam must be adjusted for logging
@@ -175,16 +177,18 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
                   'because it would lead to negative dimensions. Creation was skipped')
     
     #Squeeze 4th dimension and pass to time-series module
-    model.add(Lambda(squeeze_dim4, output_shape = squeeze_dim4_shape))
-    model.add(LSTM(units=hparams['units'],activation='relu', return_sequences=True))
-    model.add(LSTM(units=hparams['units'], activation='relu', return_sequences=False))
-    model.add(Dense(1, activation='sigmoid', kernel_regularizer=keras.regularizers.l2(hparams['regularization'])))
+    layers.append(Lambda(squeeze_dim4, output_shape = squeeze_dim4_shape)(layers[-1]))
+    layers.append(LSTM(units=hparams['units'],activation='tanh', return_sequences=True)(layers[-1]))
+    layers.append(LSTM(units=hparams['units'], activation='tanh', return_sequences=False)(layers[-1]))
+    layers.append(Dense(1, activation='sigmoid', kernel_regularizer=keras.regularizers.l2(hparams['regularization']))(layers[-1]))
     
+    model = Model(layers[0], layers[-1])
     mae_rescaled = create_mae_rescaled(rescale_factor)
-    
+
     optimizer = get_optimizer(hparams['optimizer'], hparams['learning_rate'])
-    model.compile(loss='mae', metrics=['mse', 'msle', mae_rescaled], optimizer=optimizer)
+    model.compile(loss=hparams['loss'], metrics=['mse', 'msle', 'mae', mae_rescaled], optimizer=optimizer)
     model.summary()
+
     return model
 
 
@@ -192,6 +196,7 @@ def squeeze_dim4(x4d):
     shape = tf.shape( x4d ) # get dynamic tensor shape
     x3d = tf.reshape( x4d, [shape[0], shape[1], shape[2] * shape[3]])
     return x3d
+
 
 def squeeze_dim4_shape(x4d_shape):
     in_batch, in_rows, in_cols, in_filters = x4d_shape
