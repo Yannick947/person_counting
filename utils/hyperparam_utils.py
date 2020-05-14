@@ -1,9 +1,17 @@
+import os
+
 import tensorflow as tf
-from tensorboard.plugins.hparams import api as hp
 import keras 
+from tensorboard.plugins.hparams import api as hp
 
 def get_optimizer(optimizer, learning_rate=1e-4):
-    '''
+    ''' Gets an keras optimizer and sets params 
+
+    Arguments: 
+        optimizer: Name of keras optimizer
+        learning rate: Learning rate for training velocity
+
+    returns Keras optimizer
     '''
     #TODO: For finetuning, more parameters (e.g momentum params) could be tuned like beta1 and beta2 and decay
 
@@ -13,6 +21,12 @@ def get_optimizer(optimizer, learning_rate=1e-4):
     elif optimizer == 'SGD': 
         optimizer_configured = keras.optimizers.SGD(learning_rate=learning_rate / 10, decay=learning_rate / 100)
 
+    elif optimizer == 'AdaGrad':
+        optimizer_configured = keras.optimizers.Adagrad(learning_rate=learning_rate, decay=learning_rate / 100)
+    
+    elif optimizer == 'Nadam': 
+        optimizer_configured = keras.optimizers.Nadam(learning_rate=learning_rate)
+    
     else: 
         optimizer_configured = keras.optimizers.Adam(learning_rate=learning_rate, decay=learning_rate / 100)
 
@@ -20,8 +34,12 @@ def get_optimizer(optimizer, learning_rate=1e-4):
 
 
 def get_static_hparams(args): 
-    '''
+    '''Creates dict of static params for logging
+
+    Arguments: 
+        args: Parsed input params
     
+    returns Dict with static params for logging purpose
     '''
     logging_ret = dict()
     LOGGING_ARGS = [
@@ -40,8 +58,15 @@ def get_static_hparams(args):
     return logging_ret
 
 
-def create_callbacks(logdir, hparams=None, save_best=False, reduce_on_plateau=False): 
-    '''
+def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=False): 
+    '''Creates keras callbacks for training
+
+    Arguments: 
+        logdir: Path to directory where shall be logged
+        hparams: Sample of hyperparameters for this run
+        save_best: Flag if best model during training shall be saved
+        reduce_on_plateau: Flag if callback for reducing the learning rate at
+                           detected plateau shall be included
     '''
 
     if logdir == None: 
@@ -60,16 +85,18 @@ def create_callbacks(logdir, hparams=None, save_best=False, reduce_on_plateau=Fa
     callbacks.append(hp.KerasCallback(logdir, hparams))
 
     if save_best: 
-        callbacks.append(keras.callbacks.ModelCheckpoint('best_model_{epoch:02d}_{val_loss:.2f}.hdf5',
+        save_path = os.path.join(logdir, 'best_model.hdf5')
+        callbacks.append(keras.callbacks.ModelCheckpoint(save_path,
                                                           monitor='val_loss',
                                                           save_best_only=True, 
-                                                          mode='min'))
+                                                          mode='min', 
+                                                          verbose=1))
 
     if reduce_on_plateau: 
         callbacks.append(keras.callbacks.ReduceLROnPlateau(
             monitor    = 'val_loss',
             factor     = 0.05,
-            patience   = 3,
+            patience   = 4,
             verbose    = 1,
             mode       = 'auto',
             min_delta  = 0.001,
