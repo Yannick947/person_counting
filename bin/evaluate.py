@@ -29,6 +29,7 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     model.compile(optimizer='adam', loss=create_mae_rescaled(gen.scaler.scaler_labels.scale_))
     
     y_pred, y_pred_orig, y_true, y_true_orig = get_predictions(model, gen, top_path)
+
     evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
@@ -72,7 +73,7 @@ def evaluate_predictions(history, y_pred, y_pred_orig,
     print_stats(y_pred_orig, y_true_orig, mode)
 
     if visualize == True:
-        visualize_predictions(y_pred_orig, y_true_orig, mode=mode, logdir=logdir)
+        visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig, mode=mode, logdir=logdir)
         visualize_filters(model, logdir=logdir)
         plot_losses(history, logdir=logdir)
 
@@ -122,7 +123,9 @@ def get_predictions(model, gen, top_path):
     y_true = list()
     feature_frames = list()
     y_true_orig = list()
-    
+    #TODO: Get Attributes for eval
+    attributes = pd.DataFrame(columns=['category', 'entering', 'exiting'])
+
     df_y = pd.read_csv(os.path.join(top_path, gen.label_file), header=None, names=LABEL_HEADER)
 
     for file_name in gen.file_names: 
@@ -136,6 +139,7 @@ def get_predictions(model, gen, top_path):
 
             y_true.append(y_processed[0])
             feature_frames.append(x)
+            
         except: 
             print('Failed reading feature file for ', file_name)
             continue
