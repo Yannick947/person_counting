@@ -43,13 +43,29 @@ def parse_model(model, logdir):
     returns best Keras model during training, if not existent, returns 
             last model during training
     '''
+    saved_models = list()
+    print('\nLoading best model within this training ..')
 
-    for root, _, files in os.walk(logdir):
+    for files in os.listdir(logdir):
         for file_name in files: 
-            if file_name[-5:] == '.hdf5': 
-                print('\nLoading best model within this training ...')
-                model = load_model(os.path.join(root, file_name), custom_objects={'tf': tf}, compile=False) 
-                return model
+            if file_name[-5:] == '.hdf5':
+                saved_models.append(file_name)
+    
+    if len(saved_models) == 0:
+        return model
+
+    epoch = 0
+    best_model = None
+    for i, file_name in enumerate(saved_models):
+        cur_epoch = int(file_name[:3].replace('_', '')) 
+        if  cur_epoch > epoch:
+            epoch = cur_epoch
+            os.remove(os.path.join(logdir, best_model))
+            best_model = os.path.join(logdir, file_name)
+
+        elif (i + 1) == len(saved_models):
+            return load_model(best_model, custom_objects={'tf': tf}, compile=False) 
+
     return model
 
 
