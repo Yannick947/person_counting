@@ -12,10 +12,13 @@ import cv2 as cv
 from keras.models import Model
 from keras.layers import Dense, BatchNormalization, AveragePooling2D, MaxPooling2D, Input
 
+from person_counting.models import cnn_classification as cnn_cls
 from person_counting.models import cnn_regression as cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.bin.evaluate import evaluate_model
+from person_counting.data_generators import data_generator_cnn_classification as dg_cls
+from person_counting.bin.evaluate import evaluate_run
+from person_counting.bin.evaluate_cls import evaluate_run_cls
 from person_counting.utils.preprocessing import get_filtered_lengths
 from person_counting.utils.preprocessing import get_video_daytime
 
@@ -28,7 +31,7 @@ def main():
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 1
         multi_processing = False
-        train_best(workers, multi_processing, top_path, epochs=0)
+        train_best(workers, multi_processing, top_path, epochs=1)
 
     elif sys.argv[1] == 'train_best_gpu':
         top_path = '/content/drive/My Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
@@ -40,6 +43,12 @@ def main():
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         test_input_csvs(top_path)
 
+    elif sys.argv[1] == 'train_best_cpu_cls':
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
+        workers = 1
+        multi_processing = False
+        train_best_cls(workers, multi_processing, top_path, epochs=1)
+    
     elif sys.argv[1] == 'show_feature_frames':
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         show_feature_frames(top_path)
@@ -185,7 +194,8 @@ def train_best(workers, multi_processing, top_path, epochs=25):
 
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                          sample=hparams,
-                                                         label_file=label_file)
+                                                         label_file=label_file,
+                                                         filter_hour_above=12)
 
     cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.scaler.scaler_labels.scale_)
     history, cnn_model = cnn.train(cnn_model,
@@ -198,10 +208,38 @@ def train_best(workers, multi_processing, top_path, epochs=25):
                                    epochs=epochs)
 
     for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
-        evaluate_model(cnn_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
+        evaluate_run(cnn_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
 
-    save_path = os.path.join(top_path, '/person_counting/model_snapshots/')
-    cnn_model.save('test_best{}.h5'.format(min(history.history['val_loss'])))
+    return cnn_model, history
+
+def train_best_cls(workers, multi_processing, top_path, epochs=25): 
+    '''Train best cnn model with manually put hparams from prior tuning results
+    
+    Arguments: 
+        workers: Number of workers
+        multi_processing: Flag if multi-processing is enabled
+        top_path: Path to parent directory where csv files are stored
+    '''
+    hparams, timestep_num, feature_num = get_best_hparams(top_path)
+
+    datagen_train, datagen_test = dg_cls.create_datagen(top_path=top_path, 
+                                                         sample=hparams,
+                                                         label_file=label_file,
+                                                         filter_hour_above=12)
+
+    cnn_model = cnn_cls.create_cnn(timestep_num, feature_num, hparams, datagen_train.scaler.scaler_labels.scale_, datagen_train.num_classes)
+    history, cnn_model = cnn_cls.train(cnn_model,
+                                   datagen_train,
+                                   './',
+                                   hparams,
+                                   datagen_test,
+                                   workers=workers,
+                                   use_multiprocessing=multi_processing, 
+                                   epochs=epochs)
+
+    for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
+        evaluate_run_cls(cnn_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
+
     return cnn_model, history
 
 def get_best_hparams(top_path):
@@ -231,6 +269,7 @@ def get_best_hparams(top_path):
                 'filter_rows_lower'      : 150, 
                 'pool_size_y_factor'     : 0.01, 
                 'units'                  : 5,
+                'loss'                   : 'msle',
               }
               
     timestep_num, feature_num = get_filtered_lengths(top_path=top_path, sample=hparams)
