@@ -13,7 +13,6 @@ from person_counting.models.model_argparse import parse_args
 from person_counting.utils import preprocessing as pp
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
-np.random.seed(7)
 TEST_SIZE = 0.25
 
 class Generator_CSVS(keras.utils.Sequence):
@@ -91,7 +90,7 @@ class Generator_CSVS(keras.utils.Sequence):
                 raise ValueError ('File with wrong dimensions found')
         else:
                 raise FileNotFoundError('Failed getting features for file {}'.format(file_name))
-
+                
         df_x = self.preprocessor.preprocess_features(df_x)
 
         label = get_entering(file_name, self.df_y)
@@ -206,15 +205,45 @@ def get_exiting(file_name, df_y):
         file_name: Name of given training sample
         df_y: Dataframe with all labels for all samples
 
-        returns: Exiting persons for given file
+        returns: DF wit h exiting persons for given file
     '''
     try: 
-        exiting = df_y.loc[df_y.file_name == file_name].exiting
-        return exiting 
+        search_str = file_name.replace('\\', '/').replace('\\', '/')
+        
+        if 'front' in file_name:
+            search_str = search_str[search_str.find('front'):]
+        else: 
+            search_str = search_str[search_str.find('back'):]
+
+        entering = df_y.loc[df_y.file_name == search_str].exiting
+        return entering 
 
     except Exception as e:
-        # print(e, ', no matching label found for existing csv file')
+        # print('No matching label found for existing csv file')
         return None
-    
+
+def get_video_class(file_name, df_y):
+    '''Get video type  
+
+    Arguments: 
+        file_name: Name of given training sample
+        df_y: Dataframe with all labels for all samples
+
+        returns: DataFrame with video_type for given file
+    '''
+    try: 
+        search_str = file_name.replace('\\', '/').replace('\\', '/')
+        
+        if 'front' in file_name:
+            search_str = search_str[search_str.find('front'):]
+        else: 
+            search_str = search_str[search_str.find('back'):]
+
+        video_type = df_y.loc[df_y.file_name == search_str].video_type
+        return video_type
+
+    except Exception as e:
+        # print('No matching label found for existing csv file')
+        return None
 
 
