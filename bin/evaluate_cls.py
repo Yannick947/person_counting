@@ -9,9 +9,12 @@ import pandas as pd
 from keras import backend as K
 
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
-from person_counting.data_generators.data_generators import get_entering
+from person_counting.data_generators.data_generators import get_entering, get_exiting, get_video_class
 from person_counting.bin.evaluate import parse_model
+
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
+CATEGORY_MAPPING = {0: 'normal_uncrowded', 1: 'normal_crowded', 2: 'noisy_uncrowded', 3: 'noisy_crowded'}
+
 
 def evaluate_run_cls(model, history, gen, mode, logdir, top_path, visualize=True):
     ''' Evaluate a run of certain hyperparameters
@@ -29,16 +32,17 @@ def evaluate_run_cls(model, history, gen, mode, logdir, top_path, visualize=True
     model = parse_model(model, logdir)
     model.compile(optimizer='adam', loss=f1)
     
-    y_pred_orig, y_true_orig = get_predictions(model, gen, top_path)
+    y_pred_orig, y_true_orig, video_categories = get_predictions(model, gen, top_path)
 
     evaluate_predictions(history, y_pred_orig, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
-                         logdir=logdir)
+                         logdir=logdir, video_categories=video_categories)
 
 
-def evaluate_predictions(history, y_pred_orig,
-                         y_true_orig, visualize,
-                         model, mode='Test', logdir=None):
+def evaluate_predictions(history, y_pred,
+                         y_true, visualize,
+                         model, mode='Test', logdir=None, 
+                         video_categories=None):
     '''Evaluate predictions of the best model
     Arguments: 
         history: Keras history object created during training 
@@ -53,11 +57,11 @@ def evaluate_predictions(history, y_pred_orig,
 
     '''
 
-    print_stats(y_pred_orig, y_true_orig, mode)
+    print_stats(y_pred, y_true, mode)
 
     if visualize == True:
-        visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig,
-                              mode=mode, logdir=logdir)
+        visualize_predictions(y_true=y_true, y_pred=y_pred,
+                              mode=mode, logdir=logdir, video_categories=video_categories)
         visualize_filters(model, logdir=logdir)
         plot_losses(history, logdir=logdir)
 
@@ -94,8 +98,8 @@ def get_predictions(model, gen, top_path):
 
     feature_frames = list()
     y_true_orig = list()
+    video_type = list()
     #TODO: Get Attributes for eval
-    attributes = pd.DataFrame(columns=['category', 'entering', 'exiting'])
 
     df_y = pd.read_csv(os.path.join(top_path, gen.label_file), header=None, names=LABEL_HEADER)
 
@@ -107,7 +111,9 @@ def get_predictions(model, gen, top_path):
 
             y = get_entering(file_name, df_y)
             y_true_orig.append(int(y.values[0]))
-            
+            video_category = get_video_class(file_name, df_y).values[0]
+            video_type.append(CATEGORY_MAPPING[video_category])
+
         except: 
             print('Failed reading feature file for ', file_name)
             continue
@@ -123,7 +129,7 @@ def get_predictions(model, gen, top_path):
         val_pred = int(np.argmax(y_pred[i, :], axis=0))
         y_pred_squeezed[i] = val_pred
 
-    return np.squeeze(y_pred_squeezed), np.squeeze(np.array(y_true_orig))
+    return np.squeeze(y_pred_squeezed), np.squeeze(np.array(y_true_orig)), np.array(video_type)
     
 
 def print_stats(predictions, y_true, mode):

@@ -7,10 +7,11 @@ from keras.models import load_model
 import tensorflow as tf
 import pandas as pd
 
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
-from person_counting.data_generators.data_generators import get_entering
+from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters, visualize_architecture
+from person_counting.data_generators.data_generators import get_entering, get_video_class, get_exiting
 
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
+CATEGORY_MAPPING = {0: 'normal_uncrowded', 1: 'normal_crowded', 2: 'noisy_uncrowded', 3: 'noisy_crowded'}
 
 def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     ''' Evaluate a run of certain hyperparameters
@@ -28,12 +29,12 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     model = parse_model(model, logdir)
     model.compile(optimizer='adam', loss=create_mae_rescaled(gen.scaler.scaler_labels.scale_))
     
-    y_pred, y_pred_orig, y_true, y_true_orig = get_predictions(model, gen, top_path)
+    y_pred, y_pred_orig, y_true, y_true_orig, video_cats = get_predictions(model, gen, top_path)
 
     evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
-                         logdir=logdir)
+                         logdir=logdir, video_categories=video_cats)
 
 def parse_model(model, logdir):
     ''' Parse logdir for best model
@@ -44,7 +45,6 @@ def parse_model(model, logdir):
             last model during training
     '''
     saved_models = list()
-    print('\nLoading best model within this training ..')
 
     for files in os.listdir(logdir):
         for file_name in files: 
@@ -64,6 +64,7 @@ def parse_model(model, logdir):
             best_model = os.path.join(logdir, file_name)
 
         elif (i + 1) == len(saved_models):
+            print('\nLoading from {}, which is the best within this training ..'.format(best_model))
             return load_model(best_model, custom_objects={'tf': tf}, compile=False) 
 
     return model
@@ -71,7 +72,8 @@ def parse_model(model, logdir):
 
 def evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, visualize,
-                         model, mode='Test', logdir=None):
+                         model, mode='Test', logdir=None, 
+                         video_categories=None):
     '''Evaluate predictions of the best model
     Arguments: 
         history: Keras history object created during training 
@@ -89,7 +91,7 @@ def evaluate_predictions(history, y_pred, y_pred_orig,
     print_stats(y_pred_orig, y_true_orig, mode)
 
     if visualize == True:
-        visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig, mode=mode, logdir=logdir)
+        visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig, mode=mode, logdir=logdir, video_categories=video_categories)
         visualize_filters(model, logdir=logdir)
         plot_losses(history, logdir=logdir)
 
@@ -139,8 +141,7 @@ def get_predictions(model, gen, top_path):
     y_true = list()
     feature_frames = list()
     y_true_orig = list()
-    #TODO: Get Attributes for eval
-    attributes = pd.DataFrame(columns=['category', 'entering', 'exiting'])
+    video_type = list()
 
     df_y = pd.read_csv(os.path.join(top_path, gen.label_file), header=None, names=LABEL_HEADER)
 
@@ -150,12 +151,15 @@ def get_predictions(model, gen, top_path):
             x = gen.preprocessor.preprocess_features(x)
 
             y = get_entering(file_name, df_y)
-            y_true_orig.append(y.values[0])
+            y_true_orig.append(int(y.values[0]))
             y_processed = np.copy(gen.preprocessor.preprocess_labels(y))
 
             y_true.append(y_processed[0])
             feature_frames.append(x)
-            
+
+            video_category = get_video_class(file_name, df_y).values[0]
+            video_type.append(CATEGORY_MAPPING[video_category])
+
         except: 
             print('Failed reading feature file for ', file_name)
             continue
@@ -169,7 +173,7 @@ def get_predictions(model, gen, top_path):
 
     y_pred_orig = gen.scaler.scaler_labels.inverse_transform(y_pred)
     
-    return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig)
+    return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig), np.array(video_type)
     
 
 def print_stats(predictions, y_true, mode):

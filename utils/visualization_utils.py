@@ -1,23 +1,29 @@
+import time
+import os
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-import time
-import os
 
+from ann_visualizer.visualize import ann_viz
+
+def visualize_architecture(model): 
+    print('Saving model architecture.. ')
+    ann_viz(model, title="architecture_vis")
 
 def visualize_predictions(**kwargs):
     '''Visualize predictions over ground truth
     '''
     scatterplot(**kwargs)
     violinplot(**kwargs)
+    boxplot(**kwargs)
 
 
 def add_plot_attributes(method):
-    def plot_method(y_pred, y_true, mode, logdir):
+    def plot_method(y_pred, y_true, mode, logdir, video_categories):
         figure = plt.figure()
         plt.subplot(1,1,1)
-        method(y_pred, y_true, mode, logdir)
+        method(y_pred, y_true, mode, logdir, video_categories)
         plt.title('Predictions over ground truth')
         plt.xlabel('Ground truth')
         plt.ylabel('Predictions')
@@ -38,17 +44,20 @@ def add_plot_attributes(method):
 
     return plot_method
 
+@add_plot_attributes
+def boxplot(y_true, y_pred, mode, logdir, video_categories):
+    '''Create a boxplot for predictions
+    '''
+    sns.boxplot(x=y_pred, y=y_true)
 
 @add_plot_attributes
-def scatterplot(y_true, y_pred, mode, logdir):
+def scatterplot(y_true, y_pred, mode, logdir, video_categories):
     '''Create a scatterplot for predictions
     '''
-    #TODO: Implement colour for different categories (noisy, crowd/uncrowd)
-    plt.scatter(y_pred, y_true)
-
+    sns.scatterplot(y_pred, y_true, hue=video_categories)
 
 @add_plot_attributes
-def violinplot(y_true, y_pred, mode, logdir):
+def violinplot(y_true, y_pred, mode, logdir, video_categories):
     ''' Create a violinplot for predictions
     '''
     sns.violinplot(x=y_pred, y=y_true) 
