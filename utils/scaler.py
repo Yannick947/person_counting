@@ -38,7 +38,7 @@ class CSVScaler(MinMaxScaler):
         self.fit_scalers()
 
     def fit_scalers(self, **kwargs): 
-        self.__fit_features_scaler(**kwargs)
+        self.fit_features_scaler(**kwargs)
         self.__fit_labels_scaler()
 
     def __fit_labels_scaler(self):
@@ -51,7 +51,7 @@ class CSVScaler(MinMaxScaler):
         df_y['entering'] = self.scaler_labels.fit_transform(df_y['entering'].values.reshape(-1, 1))
         self.df_y_scaled = df_y.copy()
 
-    def __fit_features_scaler(self):
+    def fit_features_scaler(self):
         df_fit_scale = pd.DataFrame()
         if type(self.file_names) is not pd.Series:
             self.file_names = pd.Series(self.file_names, name=None)
@@ -67,9 +67,9 @@ class CSVScaler(MinMaxScaler):
                 continue
 
             df = pp.clean_ends(df,
-                                self.sample['filter_cols_upper'],
-                                self.sample['filter_cols_lower'],
-                                self.sample['filter_rows_lower'])    
+                               self.sample['filter_cols_upper'],
+                               self.sample['filter_cols_lower'],
+                               self.sample['filter_rows_lower'])    
             df_fit_scale = pd.concat([df_fit_scale, df], axis=0)
 
         self.scaler_features.fit(df_fit_scale.values)
@@ -80,3 +80,33 @@ class CSVScaler(MinMaxScaler):
     def transform_labels(self, label):
         return pd.DataFrame(self.scaler_labels.transform(label.values.reshape(-1, 1)))
 
+class CSVScaler_CLS(CSVScaler):
+    '''Scaler for scaling in classification tasks
+    '''
+
+    def __init__(self, top_path, label_file, file_names, sample, sample_size):
+        '''Scaler to scale feature frames and corresponding labels for classification
+
+        Arguments: 
+            top_path: Path to search csv files
+            label_file: Name of the label file
+            file_names: File names to be considered for scaling
+            sample: Hyperparam sample
+            sample_size: Sample size from which shall be drawn for fitting the scaler
+        
+        '''
+        self.file_names         = file_names
+        self.label_file         = label_file
+        self.scaler_features    = MinMaxScaler()
+        self.scaler_labels      = None
+        self.top_path           = top_path
+        self.sample_size        = sample_size
+        self.sample             = sample
+
+        self.unfiltered_length_t, self.unfiltered_length_y = pp.get_lengths(self.top_path)
+        
+        super(CSVScaler_CLS, self).fit_features_scaler()
+
+    def transform_labels(self, label):
+        return label
+    
