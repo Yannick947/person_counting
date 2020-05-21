@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from person_counting.data_generators.data_generators import Generator_CSVS
 from person_counting.data_generators.data_generators import *
 from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.utils.scaler import CSVScaler
+from person_counting.utils.scaler import CSVScaler_CLS
 from person_counting.utils.preprocessing import apply_file_filters
 
 class Generator_CSVS_CNN_CLS(Generator_CSVS):
@@ -41,7 +41,7 @@ class Generator_CSVS_CNN_CLS(Generator_CSVS):
         #TODO: make it work for entering and exiting, care at transformation, both must exist
         all_file_names = get_feature_file_names(top_path)
         df_y = df_y[df_y['file_name'].apply(lambda row: any(row[-32:] in csv_file_name[-32:] for csv_file_name in all_file_names))]
-        return int(df_y['entering'].max())
+        return int(df_y['entering'].max()) + 1
 
     def datagen(self):
         '''Datagenerator for bus video csv for cnn classification 
@@ -70,7 +70,7 @@ class Generator_CSVS_CNN_CLS(Generator_CSVS):
                     continue
 
                 x_batch[batch_index,:,:,0] = df_x
-                y_batch[batch_index, int(np.asscalar(label.values[0]))] = 1
+                y_batch[batch_index, int(label[0])] = 1
                 batch_index += 1
 
                 # Shape for x must be 4D [samples, timesteps, features, channels] and numpy array
@@ -107,8 +107,9 @@ def create_datagen(top_path,
 
     print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(len(train_file_names), len(test_file_names)))
     
-    #TODO: Should be mix of train and test file names
-    scaler = CSVScaler(top_path, label_file, train_file_names, sample, sample_size=100)
+    # TODO: Scaler for labels and features must be seperated and label scaler set to None correctly
+    # TODO: Should be mix of train and test file names
+    scaler = CSVScaler_CLS(top_path, label_file, train_file_names, sample, sample_size=100)
 
     gen_train = Generator_CSVS_CNN_CLS(length_t,
                                        length_y,
@@ -118,7 +119,7 @@ def create_datagen(top_path,
                                        top_path=top_path,
                                        label_file=label_file, 
                                        augmentation_factor=augmentation_factor)
-    
+
     #Don't do augmentation here!
     gen_test = Generator_CSVS_CNN_CLS(length_t,
                                       length_y,
