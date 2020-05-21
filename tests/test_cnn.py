@@ -227,7 +227,7 @@ def train_best_cls(workers, multi_processing, top_path, epochs=25):
                                                          label_file=label_file,
                                                          filter_hour_above=12)
 
-    cnn_model = cnn_cls.create_cnn(timestep_num, feature_num, hparams, datagen_train.scaler.scaler_labels.scale_, datagen_train.num_classes)
+    cnn_model = cnn_cls.create_cnn(timestep_num, feature_num, hparams, datagen_train.num_classes)
     history, cnn_model = cnn_cls.train(cnn_model,
                                    datagen_train,
                                    './',

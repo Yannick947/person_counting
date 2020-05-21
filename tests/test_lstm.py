@@ -2,10 +2,10 @@ import datetime
 import sys
 import os
 import random
-import time 
+import time
 
 import pandas as pd
-import numpy as np  
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from keras.models import Model
@@ -14,7 +14,7 @@ from keras.layers import Dense, BatchNormalization, AveragePooling2D, MaxPooling
 from person_counting.models import lstm_regression as lstm
 from person_counting.data_generators import data_generators as dgv
 from person_counting.data_generators import data_generator_cnn as dgv_lstm
-from person_counting.bin.evaluate import evaluate_model
+from person_counting.bin.evaluate import evaluate_run
 from person_counting.tests.test_cnn import test_input_csvs
 from person_counting.utils.preprocessing import get_filtered_lengths
 
@@ -38,6 +38,7 @@ def main():
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/bus_videos/pcds_dataset_detected/'
         test_input_csvs(top_path)
 
+
 def train_best(workers, multi_processing, top_path): 
     '''Train best lstm model with manually put hparams from prior tuning results
     
@@ -56,11 +57,10 @@ def train_best(workers, multi_processing, top_path):
     model = lstm.create_lstm(timestep_num, feature_num, sample)
     history, lstm_model= lstm.train(model, datagen_train, logdir=None, hparams=sample, datagen_test=datagen_test)
     for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
-        evaluate_model(lstm_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
+        evaluate_run(lstm_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
 
     lstm_model.save('test_best{}.h5'.format(min(history.history['val_loss'])))
     return lstm_model, history
-
 
 
 def get_best_hparams(top_path):

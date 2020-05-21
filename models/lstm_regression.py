@@ -19,8 +19,8 @@ from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
 from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
 from person_counting.models.model_argparse import parse_args
-from person_counting.bin.evaluate import evaluate_model
-
+from person_counting.bin.evaluate import evaluate_run
+from person_counting.utils.preprocessing import get_filtered_lengths
 
 def main(args=None):
     # parse arguments
@@ -31,7 +31,7 @@ def main(args=None):
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
-        timestep_num, feature_num = dgv.get_filtered_lengths(args.top_path, sample)
+        timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
         
         datagen_train, datagen_test = dgv_lstm.create_datagen(args.top_path,
                                                              sample,
@@ -43,7 +43,7 @@ def main(args=None):
         logdir = os.path.join(args.topdir_log + '_lstm' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
         model = create_lstm(timestep_num, feature_num, sample)
         history, model= train(model, datagen_train, logdir, sample, datagen_test)
-        evaluate_model(model, history, datagen_test,  mode='test', logdir=logdir, visualize=False)
+        evaluate_run(model, history, datagen_test,  mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
 
 
 def train(model,
@@ -81,7 +81,7 @@ def train(model,
                                   epochs=epochs,
                                   verbose=1,
                                   shuffle=True,
-                                  callbacks=create_callbacks(logdir, hparams, save_best=False), 
+                                  callbacks=create_callbacks(logdir, hparams, save_best=True), 
                                   use_multiprocessing=use_multiprocessing, 
                                   workers=workers, 
                                   max_queue_size=64

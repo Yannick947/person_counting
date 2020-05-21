@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         
         {
             "name": "data_generator_videos as module",
@@ -56,6 +57,14 @@
             "module": "person_counting.tests.test_cnn",
             "cwd": "C:/Users/Yannick/Google Drive/",
             "args": ["train_best_cpu"],
+        },
+        {
+            "name": "cnn_classification train best cpu",
+            "type": "python",
+            "request": "launch",
+            "module": "person_counting.tests.test_cnn",
+            "cwd": "C:/Users/Yannick/Google Drive/",
+            "args": ["train_best_cpu_cls"],
         },
     ]
 }

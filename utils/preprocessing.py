@@ -53,7 +53,7 @@ class Preprocessor(object):
     def preprocess_labels(self, label): 
         '''Preprocess labels 
         '''
-        if self.scaler is not None:
+        if self.scaler.scaler_labels is not None:
             label = self.scaler.transform_labels(label)
         else: 
             label = label.values

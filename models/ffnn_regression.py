@@ -18,8 +18,9 @@ from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
 from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
 from person_counting.models.model_argparse import parse_args
-from person_counting.bin.evaluate import evaluate_model
+from person_counting.bin.evaluate import evaluate_run
 from person_counting.models import lstm_regression as lsr
+from person_counting.utils.preprocessing import get_filtered_lengths
 
 
 def main(args=None):
@@ -31,7 +32,7 @@ def main(args=None):
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
-        timestep_num, feature_num = dgv.get_filtered_lengths(args.top_path, sample)
+        timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
         
         datagen_train, datagen_test = dgv_lstm.create_datagen(args.top_path,
                                                              sample,
@@ -41,7 +42,7 @@ def main(args=None):
         logdir = os.path.join(args.topdir_log + '_ffnn' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
         model = create_ffnn(timestep_num, feature_num, sample)
         history, model= lsr.train(model, datagen_train, logdir, sample, datagen_test)
-        evaluate_model(model, history, datagen_test,  mode='test', logdir=logdir, visualize=False)
+        evaluate_run(model, history, datagen_test,  mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
 
 def create_ffnn(timesteps, features, hparams):
     ''' Creates a feed forward neural network with pooling at input 
