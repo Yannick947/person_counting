@@ -6,6 +6,10 @@ import math
 import pandas as pd
 import numpy as np 
 
+sample = pd.DataFrame([[1,1,0], [0,0.4, 1]], index=None)
+
+
+
 def time_measure(method):
     def timed(*args, **kw):
         ts = time.time()
@@ -22,7 +26,7 @@ def augment_trajectory(df, aug_factor=0.1):
     '''Augment a trajectory by moving certain pixels which are detections
     into random directions
     '''
-    
+    print('Care using Augmentation, significante performance deacreases might be possible')
     
     #Get list of indices and sample subset 
     indices = get_indices_detections(df)
@@ -37,7 +41,10 @@ def augment_trajectory(df, aug_factor=0.1):
 
 
 def get_destination(df, old_position, indices): 
-    directions = [(0, -1), (0, 1), (1, 0), (-1, 0)]
+    '''Get destinations where pixel can be moved to
+    '''
+    directions = [(1,1), (-1,-1), (1,1), (-1,-1), (0,-1), (0,1), (1,0), (-1,0)]
+
     for _ in range(len(directions)):
         direction = random.sample(directions, 1)[0]
 
@@ -57,14 +64,14 @@ def get_destination(df, old_position, indices):
 
 
 def get_indices_detections(df):
-    detection_indices = list()
-    for i_row in range(df.shape[0]):
-        for i_col in range(df.shape[1]):
-            if df.iloc[i_row, i_col] > 0.1:
-                detection_indices.append((i_row, i_col))
-
-    return detection_indices
-
+    '''Returns list of tuples of indices of detections
+    '''
+    nonzeros = np.nonzero(df.values)
+    detections = list()
+    for i in range(len(nonzeros[0])):
+        detections.append((nonzeros[0][i], nonzeros[1][i]))
+    return detections
+     
 
 def move_pixel(df, old_dest, new_dest):
 
@@ -75,11 +82,11 @@ def move_pixel(df, old_dest, new_dest):
     return df
 
 def main():
-    test_df = pd.DataFrame(np.random.randint(0,100, size=(10, 10)), columns=None)
+    test_df = pd.DataFrame([[0,0,0,0,1],[0,1,1,1,0],[0,0,0,1,0]], columns=None)
     test_df /= 100
 
     print(test_df.head())
-    df_augmented = augment_trajectory(test_df)
+    df_augmented = augment_trajectory(test_df, 1)
     print(df_augmented.head())
 
 if __name__ == '__main__':
