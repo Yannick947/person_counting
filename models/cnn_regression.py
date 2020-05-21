@@ -8,14 +8,14 @@ import pandas as pd
 import numpy as np
 from keras import Model
 from keras.layers import (Dense, MaxPooling2D, Conv2D, Flatten, BatchNormalization,
-                          AveragePooling2D, Reshape, LSTM, Layer, Lambda, Input)
+                          AveragePooling2D, Reshape, LSTM, Layer, Lambda, Input, GRU)
 from sklearn.model_selection import ParameterSampler
 from scipy.stats import loguniform
 
 from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
-from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
+from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams, hard_tanh
 from person_counting.models.model_argparse import parse_args
 from person_counting.bin.evaluate import evaluate_run, create_mae_rescaled
 from person_counting.utils.preprocessing import get_filtered_lengths
@@ -68,24 +68,27 @@ def get_samples(args):
     param_grid = {
                   'pooling_type'        : ['avg', 'max'],
                   'kernel_size'         : [i for i in range(3, 5)],
-                  'kernel_number'       : [i for i in range(3,10)],
+                  'kernel_number'       : [i for i in range(2,5)],
                   'pool_size_y'         : [2],
-                  'pool_size_x'         : [2],
-                  'learning_rate'       : loguniform.rvs(a=5e-4, b=1e-2, size=100000),
-                  'optimizer'           : ['Adam', 'AdaGrad', 'Nadam'], 
-                  'layer_number'        : [1, 2, 3], 
-                  'batch_normalization' : [False],
-                  'regularization'      : [i/20 for i in range(20)], 
+                  'pool_size_x'         : [2, 3],
+                  'learning_rate'       : loguniform.rvs(a=1e-4, b=1e-2, size=100000),
+                  'optimizer'           : ['Adam'], 
+                  'layer_number'        : [2, 3, 4], 
+                  'batch_normalization' : [False, True],
+                  'regularization'      : [0], 
                   'filter_rows_lower'   : [i for i in range(150)], 
-                  'filter_cols_upper'   : [i for i in range(5, 30)], 
-                  'filter_cols_lower'   : [i for i in range(5, 25)],
+                  'filter_cols_upper'   : [i for i in range(15, 35)], 
+                  'filter_cols_lower'   : [i for i in range(15, 25)],
                   'filter_rows_factor'  : [1],
                   'batch_size'          : [32, 64, 128], 
-                  'units'               : [i for i in range(2,7)],
-                  'loss'                : ['msle', 'mse', 'mae']
+                  'loss'                : ['msle', 'mae'], 
+                  'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
+                  'units'               : [i for i in range(4,15)],                  
                 }
 
-    dynamic_params = list(ParameterSampler(param_grid, n_iter=args.n_runs, random_state=int(np.random.randint(10, size=1))))
+    randint = int(tf.random.uniform(shape=[], minval=0, maxval=10, dtype=tf.dtypes.int32, seed=None))
+    dynamic_params = list(ParameterSampler(param_grid, n_iter=args.n_runs, random_state=randint))
+    
     static_params = get_static_hparams(args)
 
     return [{**dp, **static_params} for dp in dynamic_params]
@@ -96,9 +99,9 @@ def train(model,
           logdir=None,
           hparams=None,
           datagen_test=None,
-          workers=16,
+          workers=32,
           use_multiprocessing=True, 
-          epochs=50, 
+          epochs=70, 
           rescale_factor=1):
     '''Train a given model with given datagenerator
 
@@ -130,9 +133,8 @@ def train(model,
                                   callbacks=create_callbacks(logdir, hparams, save_best=True), 
                                   use_multiprocessing=use_multiprocessing, 
                                   workers=workers, 
-                                  max_queue_size=16,
+                                  max_queue_size=workers,
                                   )
-
     return history, model
 
 
@@ -146,14 +148,14 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
 
         returns keras model with cnn architecture
     '''
-
+    #define layer creations
     def create_conv_layer():
         return Conv2D(hparams['kernel_number'],
                     hparams['kernel_size'],
                     use_bias=True,
                     activation='relu', 
                     kernel_initializer=keras.initializers.glorot_normal(), 
-                    padd)
+                    padding='same')
 
     if hparams['pooling_type'] == 'avg': 
         def create_pool_layer():
@@ -162,13 +164,28 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
         def create_pool_layer():
             return MaxPooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y']))
 
+    if hparams['Recurrent_Celltype'] == 'LSTM': 
+        def create_rnn_layer(return_sequences=False): 
+            return LSTM(units=hparams['units'],
+                        activation=hard_tanh,
+                        return_sequences=return_sequences,
+                        kernel_regularizer=keras.regularizers.l2(hparams['regularization']))
+
+    elif hparams['Recurrent_Celltype'] == 'GRU':
+        def create_rnn_layer(return_sequences=False): 
+            return GRU(units=hparams['units'],
+                       activation=hard_tanh,
+                       return_sequences=return_sequences,
+                       kernel_regularizer=keras.regularizers.l2(hparams['regularization']))
+
+
     layers = list()
     layers.append(Input(shape=(timesteps, features, 1)))
 
     for _ in range(hparams['layer_number']):
         try:
-            layers.append(create_conv_layer()(layers[-1]))
             layers.append(create_pool_layer()(layers[-1]))
+            layers.append(create_conv_layer()(layers[-1]))
 
         except ValueError:
             #Creation failed, hparam must be adjusted for logging
@@ -178,15 +195,15 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
     
     #Squeeze 4th dimension and pass to time-series module
     layers.append(Lambda(squeeze_dim4, output_shape = squeeze_dim4_shape)(layers[-1]))
-    layers.append(LSTM(units=hparams['units'],activation='tanh', return_sequences=True)(layers[-1]))
-    layers.append(LSTM(units=hparams['units'], activation='tanh', return_sequences=False)(layers[-1]))
-    layers.append(Dense(1, activation='sigmoid', kernel_regularizer=keras.regularizers.l2(hparams['regularization']))(layers[-1]))
+    layers.append(create_rnn_layer(return_sequences=True)(layers[-1]))
+    layers.append(create_rnn_layer(return_sequences=False)(layers[-1]))
+    layers.append(Dense(1, activation=keras.activations.hard_sigmoid, kernel_regularizer=keras.regularizers.l2(hparams['regularization']))(layers[-1]))
     
     model = Model(layers[0], layers[-1])
     mae_rescaled = create_mae_rescaled(rescale_factor)
 
     optimizer = get_optimizer(hparams['optimizer'], hparams['learning_rate'])
-    model.compile(loss=hparams['loss'], metrics=['mse', 'msle', 'mae', mae_rescaled], optimizer=optimizer)
+    model.compile(loss=hparams['loss'], metrics=['msle', mae_rescaled], optimizer=optimizer)
     model.summary()
 
     return model
@@ -209,4 +226,3 @@ def squeeze_dim4_shape(x4d_shape):
 
 if __name__ == '__main__':
     main() 
-
