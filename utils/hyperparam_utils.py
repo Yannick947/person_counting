@@ -4,6 +4,20 @@ import tensorflow as tf
 import keras 
 from tensorboard.plugins.hparams import api as hp
 
+
+def hard_tanh(x): 
+    '''Hard tanh function
+    Arguments: 
+        x: Input value
+    
+    hard_tanh(x) = {-1,      for x < -2, 
+                    tanh(x), for x > -2 and x < 2
+                    1,       for x > 2              }
+
+    returns value according to hard tanh function
+    '''
+    return tf.maximum(tf.cast(-1, tf.float32), tf.minimum(tf.cast(1, tf.float32), tf.cast(keras.backend.tanh(x) * 1.05, tf.float32)))
+
 def get_optimizer(optimizer, learning_rate=1e-4):
     ''' Gets an keras optimizer and sets params 
 
@@ -85,7 +99,7 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
     callbacks.append(hp.KerasCallback(logdir, hparams))
 
     if save_best: 
-        save_path = os.path.join(logdir, 'best_model.hdf5')
+        save_path = os.path.join(logdir, '{epoch:02d}_{val_loss:.2f}.hdf5')
         callbacks.append(keras.callbacks.ModelCheckpoint(save_path,
                                                           monitor='val_loss',
                                                           save_best_only=True, 
