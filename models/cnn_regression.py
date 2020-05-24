@@ -16,7 +16,7 @@ from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.data_generators import data_generators as dgv
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
 from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams, hard_tanh
-from person_counting.models.model_argparse import parse_args
+from person_counting.models.model_argparse import parse_args, check_args
 from person_counting.bin.evaluate import evaluate_run, create_mae_rescaled
 from person_counting.utils.preprocessing import get_filtered_lengths
 
@@ -26,7 +26,9 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     args = parse_args(args)
-
+    print(args)
+    check_args(args)
+    
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
@@ -79,7 +81,6 @@ def get_samples(args):
                   'filter_rows_lower'   : [i for i in range(150)], 
                   'filter_cols_upper'   : [i for i in range(15, 35)], 
                   'filter_cols_lower'   : [i for i in range(15, 25)],
-                  'filter_rows_factor'  : [1],
                   'batch_size'          : [32, 64, 128], 
                   'loss'                : ['msle', 'mae'], 
                   'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
@@ -122,6 +123,10 @@ def train(model,
     
     #Add num params parameter only for logging purposes
     hparams['number_params'] = model.count_params()
+    max_metrics = {
+                    'epoch_mae_rescaled': 'min',
+                    'epoch_msle'        : 'min', 
+                    }
 
     history = model.fit_generator(validation_steps=int(len(datagen_test)),
                                   generator=datagen_train.datagen(),
@@ -130,7 +135,7 @@ def train(model,
                                   epochs=epochs,
                                   verbose=1,
                                   shuffle=True,
-                                  callbacks=create_callbacks(logdir, hparams, save_best=True), 
+                                  callbacks=create_callbacks(logdir, hparams, save_best=True, max_metrics=max_metrics), 
                                   use_multiprocessing=use_multiprocessing, 
                                   workers=workers, 
                                   max_queue_size=workers,
@@ -139,7 +144,7 @@ def train(model,
 
 
 def create_cnn(timesteps, features, hparams, rescale_factor):
-    '''Creates a convolutional nn with architecture defined in hparams
+    '''Creates a convolutional-rnn nn with architecture defined in hparams
 
     Arguments: 
         timesteps: Amount of timesteps in input data
@@ -180,7 +185,7 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
 
 
     layers = list()
-    layers.append(Input(shape=(timesteps, features, 1)))
+    layers.append(Input(shape=(timesteps, features, 2)))
 
     for _ in range(hparams['layer_number']):
         try:

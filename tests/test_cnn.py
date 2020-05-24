@@ -28,7 +28,7 @@ LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 def main():
     if sys.argv[1] == 'train_best_cpu': 
-        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcdsdataset_detected/'
         workers = 1
         multi_processing = False
         train_best(workers, multi_processing, top_path, epochs=1)
@@ -61,8 +61,8 @@ def show_feature_frames(top_path):
                                                          sample=hparams,
                                                          label_file=label_file, 
                                                          augmentation_factor=0.1, 
-                                                         filter_hour_above=16, 
-                                                         filter_category_noisy=True)
+                                                         filter_hour_above=23, 
+                                                         filter_category_noisy=False)
     for datagen in [datagen_test, datagen_train]:                                                   
         gen = datagen.datagen()
         sns.set()
@@ -195,9 +195,9 @@ def train_best(workers, multi_processing, top_path, epochs=25):
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                          sample=hparams,
                                                          label_file=label_file,
-                                                         filter_hour_above=12)
+                                                         filter_hour_above=24)
 
-    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.scaler.scaler_labels.scale_)
+    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_)
     history, cnn_model = cnn.train(cnn_model,
                                    datagen_train,
                                    './',
@@ -250,14 +250,13 @@ def get_best_hparams(top_path):
     '''
     hparams = {
                 'kernel_number'          : 5,
-                'batch_size'             : 32,
+                'batch_size'             : 1,
                 'regularization'         : 0.1,
                 'filter_cols_upper'      : 35,
                 'layer_number'           : 1,
                 'kernel_size'            : 4,
                 'filter_cols_factor'     : 1,
                 'pooling_type'           : 'max',
-                'filter_rows_factor'     : 1,
                 'learning_rate'          : 0.0029459,
                 'y_stride'               : 1,
                 'optimizer'              : 'Adam',
@@ -270,6 +269,7 @@ def get_best_hparams(top_path):
                 'pool_size_y_factor'     : 0.01, 
                 'units'                  : 5,
                 'loss'                   : 'msle',
+                'Recurrent_Celltype'     : 'GRU',
               }
               
     timestep_num, feature_num = get_filtered_lengths(top_path=top_path, sample=hparams)

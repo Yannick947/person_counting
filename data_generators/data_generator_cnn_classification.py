@@ -25,7 +25,6 @@ class Generator_CSVS_CNN_CLS(Generator_CSVS):
         length_y            : Length of the feature's DataFrame in y direction
         file_names          : File names to be processed
         filter_cols_upper,  : Amount of columns to be filtered at end and start of DataFrame
-        filter_rows_factor  : Factor of rows to be filtered
         batch_size          : Batch size
         top_path            : Parent path where csv files are contained
         label_file          : Name of the label file
@@ -83,7 +82,7 @@ def create_datagen(top_path,
                    sample, 
                    label_file, 
                    augmentation_factor=0, 
-                   filter_hour_above=0, 
+                   filter_hour_above=24, 
                    filter_category_noisy=False): 
     '''
     Creates train and test data generators for cnn network. 
@@ -107,13 +106,12 @@ def create_datagen(top_path,
 
     print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(len(train_file_names), len(test_file_names)))
     
-    # TODO: Scaler for labels and features must be seperated and label scaler set to None correctly
-    # TODO: Should be mix of train and test file names
+    # TODO: Should be mix of train and test file names, feature and label scaler refactoring
     scaler = CSVScaler_CLS(top_path, label_file, train_file_names, sample, sample_size=100)
 
-    gen_train = Generator_CSVS_CNN_CLS(length_t,
-                                       length_y,
-                                       train_file_names,
+    gen_train = Generator_CSVS_CNN_CLS(length_t=length_t,
+                                       length_y=length_y,
+                                       file_names=train_file_names,
                                        scaler=scaler, 
                                        sample=sample,
                                        top_path=top_path,
@@ -121,9 +119,9 @@ def create_datagen(top_path,
                                        augmentation_factor=augmentation_factor)
 
     #Don't do augmentation here!
-    gen_test = Generator_CSVS_CNN_CLS(length_t,
-                                      length_y,
-                                      test_file_names,
+    gen_test = Generator_CSVS_CNN_CLS(length_t=length_t,
+                                      length_y=length_y,
+                                      file_names=test_file_names,
                                       scaler=scaler, 
                                       sample=sample,
                                       top_path=top_path,

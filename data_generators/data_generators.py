@@ -16,7 +16,7 @@ LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 TEST_SIZE = 0.25
 
 class Generator_CSVS(keras.utils.Sequence):
-    '''Abstract class for Generators to load csv files from 
+    '''Abstract class for Generators to load npy files from 
     video folder structre like PCDS Dataset
     '''
     __metaclass__ = abc.ABCMeta
@@ -28,7 +28,8 @@ class Generator_CSVS(keras.utils.Sequence):
                  sample,
                  top_path,
                  label_file, 
-                 scaler,
+                 feature_scaler,
+                 label_scaler,
                  augmentation_factor=0): 
 
         ''' Initialize Generator object.
@@ -39,12 +40,11 @@ class Generator_CSVS(keras.utils.Sequence):
                 file_names          : File names to be processed
                 filter_cols_upper   : Amount of columns to be filtered at end and start of DataFrame
                 sample              : Sample of hyperparameter
-                top_path            : Parent path where csv files are contained
+                top_path            : Parent path where npy files are contained
                 label_file          : Name of the label file
                 augmentation_factor : Factor how much augmentation shall be done, 1 means moving every
                                       pixel for 1 position 
         '''
-
         self.top_path               = top_path
         self.label_file             = label_file
         self.length_t               = length_t
@@ -52,22 +52,22 @@ class Generator_CSVS(keras.utils.Sequence):
         self.file_names             = file_names 
         self.filter_cols_upper      = sample['filter_cols_upper']
         self.filter_cols_lower      = sample['filter_cols_lower']
-        self.filter_rows_factor     = sample['filter_rows_factor']
         self.batch_size             = sample['batch_size']
         self.labels                 = list()
         self.file_names_processed   = list()
-        self.scaler                 = scaler
-        self.df_y                   = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
+        self.feature_scaler         = feature_scaler
+        self.label_scaler           = label_scaler
         self.augmentation_factor    = augmentation_factor
         self.sample                 = sample 
         self.unfiltered_length_t, self.unfiltered_length_y = pp.get_lengths(self.top_path)
-        self.preprocessor           = pp.Preprocessor(length_t, length_y, top_path, sample, scaler, augmentation_factor)
+        self.preprocessor           = pp.Preprocessor(length_t, length_y, top_path, sample, feature_scaler, label_scaler, augmentation_factor)
+        self.df_y                   = self.load_label_file()
 
     @abc.abstractmethod
     def datagen(self):
         '''Returns datagenerator
         '''
-        return
+        raise NotImplementedError
     
     def __len__(self):
         '''Returns the amount of batches for the generator
@@ -81,24 +81,25 @@ class Generator_CSVS(keras.utils.Sequence):
         Arguments: 
             file_name: The name of the file which shall be parsed
         '''
-        df_x = self.__get_features(file_name)
+        arr_x = self.__get_features(file_name)
 
-        if df_x is not None: 
-            if df_x.shape[0] != self.unfiltered_length_t or\
-               df_x.shape[1] != self.unfiltered_length_y:
+        if arr_x is not None: 
+            if arr_x.shape[0] != self.unfiltered_length_t or\
+               arr_x.shape[1] != self.unfiltered_length_y or\
+               arr_x.shape[2] != 2:
 
                 raise ValueError ('File with wrong dimensions found')
         else:
                 raise FileNotFoundError('Failed getting features for file {}'.format(file_name))
                 
-        df_x = self.preprocessor.preprocess_features(df_x)
+        arr_x = self.preprocessor.preprocess_features(arr_x)
 
         label = get_entering(file_name, self.df_y)
         label = self.preprocessor.preprocess_labels(label)
 
         self.file_names_processed.append(file_name)
         self.labels.append(label)
-        return df_x, label
+        return arr_x, label
 
     def __get_features(self, file_name): 
         '''Get sample of features for given filename. 
@@ -109,13 +110,17 @@ class Generator_CSVS(keras.utils.Sequence):
             returns: Features for given file_name
         '''
 
-        full_path = file_name
         try:
-            df_x = pd.read_csv(full_path, header=None)
-            return df_x
+            arr = np.load(file_name)
+            return arr
 
         except Exception as e:
             return None
+
+    def load_label_file(self):
+        df_y = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
+        df_y['file_name'] = df_y['file_name'].apply(lambda row: row[:-4] + '.npy')
+        return df_y
 
     def get_labels(self):
         '''Returns the labels which were yielded since calling reset_labels() 
@@ -139,17 +144,17 @@ class Generator_CSVS(keras.utils.Sequence):
         
 def get_feature_file_names(top_path): 
     '''
-    Get names of all csv files for training
+    Get names of all npy files for training
 
     Arguments: 
-        top_path: Parent directory where to search for csv files
+        top_path: Parent directory where to search for npy files
     '''
-    csv_names = list()
+    names = list()
     for root, _, files in os.walk(top_path):
         for file_name in files: 
-            if (file_name[-4:] == '.csv') and not ('label' in file_name): 
-                csv_names.append(os.path.join(root, file_name))
-    return csv_names
+            if (file_name[-4:] == '.npy') and not ('label' in file_name): 
+                names.append(os.path.join(root, file_name))
+    return names
 
 
 def split_files(top_path, label_file):
@@ -159,12 +164,14 @@ def split_files(top_path, label_file):
     '''
 
     df_names = pd.Series(get_feature_file_names(top_path))
-
-    #replace .avi with .csv
-    df_names = df_names.apply(lambda row: row[:-4] + '.csv')
-    return train_test_split(df_names, test_size=TEST_SIZE, random_state=10)
+    #replace .avi with .npy
+    df_names = df_names.apply(lambda row: row[:-4] + '.npy')
+    train, test = train_test_split(df_names,
+                                   train_size= 1-TEST_SIZE,
+                                   test_size=TEST_SIZE,
+                                   random_state=10)
+    return train, test
             
-
 def get_filters(file_names):
     '''Searches for the right columns amount of columns and rows to drop
     '''
@@ -185,16 +192,16 @@ def get_entering(file_name, df_y):
     try: 
         search_str = file_name.replace('\\', '/').replace('\\', '/')
         
-        if 'front' in file_name:
-            search_str = search_str[search_str.find('front'):]
+        if 'front_in' in file_name:
+            search_str = search_str[search_str.find('front_in'):]
         else: 
-            search_str = search_str[search_str.find('back'):]
+            search_str = search_str[search_str.find('back_out'):]
 
         entering = df_y.loc[df_y.file_name == search_str].entering
         return entering 
 
     except Exception as e:
-        # print('No matching label found for existing csv file')
+        # print('No matching label found for existing npy file')
         return None
 
 
@@ -210,16 +217,16 @@ def get_exiting(file_name, df_y):
     try: 
         search_str = file_name.replace('\\', '/').replace('\\', '/')
         
-        if 'front' in file_name:
-            search_str = search_str[search_str.find('front'):]
+        if 'front_in' in file_name:
+            search_str = search_str[search_str.find('front_in'):]
         else: 
-            search_str = search_str[search_str.find('back'):]
+            search_str = search_str[search_str.find('back_out'):]
 
         entering = df_y.loc[df_y.file_name == search_str].exiting
         return entering 
 
     except Exception as e:
-        # print('No matching label found for existing csv file')
+        # print('No matching label found for existing npy file')
         return None
 
 def get_video_class(file_name, df_y):
@@ -235,15 +242,15 @@ def get_video_class(file_name, df_y):
         search_str = file_name.replace('\\', '/').replace('\\', '/')
         
         if 'front' in file_name:
-            search_str = search_str[search_str.find('front'):]
+            search_str = search_str[search_str.find('front_in'):]
         else: 
-            search_str = search_str[search_str.find('back'):]
+            search_str = search_str[search_str.find('back_out'):]
 
         video_type = df_y.loc[df_y.file_name == search_str].video_type
         return video_type
 
     except Exception as e:
-        # print('No matching label found for existing csv file')
+        # print('No matching label found for existing npy file')
         return None
 
 

@@ -2,16 +2,64 @@ import math
 import statistics
 import os
 
-import numpy as np 
+import keras
 from keras.models import load_model
 import tensorflow as tf
+from tensorflow.core.util import event_pb2
 import pandas as pd
+import numpy as np 
 
 from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters, visualize_architecture
 from person_counting.data_generators.data_generators import get_entering, get_video_class, get_exiting
 
-LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 CATEGORY_MAPPING = {0: 'normal_uncrowded', 1: 'normal_crowded', 2: 'noisy_uncrowded', 3: 'noisy_crowded'}
+
+
+class Evaluate(keras.callbacks.Callback):
+    """ Evaluation callback for arbitrary datasets.
+    """
+
+    def __init__(self, metric_name, mode, logdir):
+        """ Evaluate a given dataset using a given model at the end of every epoch during training.
+        """
+        self.metric_name = metric_name
+        self.mode = mode 
+        self.logdir = logdir
+        super(Evaluate, self).__init__()
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        print(logs)
+
+        max_metric = get_max_val(self.metric_name, self.mode, self.logdir)
+
+        if max_metric is not None: 
+            logs[self.metric_name + '_max'] = max_metric
+        else: 
+            print('Care to specify correct metric names')
+
+
+def get_max_val(tag, mode, logdir): 
+    '''Gets the maximum value from the logged validation file for a certain metric
+    '''
+    for file_name in os.listdir(os.path.join(logdir, 'validation')):
+        if file_name[-3:] == '.v2':
+            serialized_examples = tf.data.TFRecordDataset(os.path.join(logdir, 'validation', file_name))
+
+    maximum_val = None
+    for serialized_example in serialized_examples:
+        event = event_pb2.Event.FromString(serialized_example.numpy())
+        for value in event.summary.value:
+            if value.tag == tag:
+                if maximum_val == None: 
+                    maximum_val = value.simple_value
+                elif maximum_val < value.simple_value and mode == 'max':
+                    maximum_val = value.simple_value
+                elif maximum_val > value.simple_value and mode == 'min': 
+                    maximum_val = value.simple_value
+
+    return maximum_val
+
 
 def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     ''' Evaluate a run of certain hyperparameters
@@ -27,7 +75,7 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
 
     #Search for best model in logdir if existing
     model = parse_model(model, logdir)
-    model.compile(optimizer='adam', loss=create_mae_rescaled(gen.scaler.scaler_labels.scale_))
+    model.compile(optimizer='adam', loss=create_mae_rescaled(gen.label_scaler.scale_))
     
     y_pred, y_pred_orig, y_true, y_true_orig, video_cats = get_predictions(model, gen, top_path)
 
@@ -143,11 +191,11 @@ def get_predictions(model, gen, top_path):
     y_true_orig = list()
     video_type = list()
 
-    df_y = pd.read_csv(os.path.join(top_path, gen.label_file), header=None, names=LABEL_HEADER)
+    df_y = gen.load_label_file()
 
     for file_name in gen.file_names: 
         try: 
-            x = pd.read_csv(file_name, header=None)
+            x = np.load(file_name)
             x = gen.preprocessor.preprocess_features(x)
 
             y = get_entering(file_name, df_y)
@@ -165,13 +213,11 @@ def get_predictions(model, gen, top_path):
             continue
 
     #Reshape features
-    feature_frames = np.dstack(feature_frames)
-    feature_frames = np.moveaxis(feature_frames, 2, 0)[..., np.newaxis]
-
+    feature_frames = np.stack(feature_frames, axis=0)
     print(model.evaluate(x=feature_frames, y=np.array(y_true)))
     y_pred = model.predict(feature_frames)
 
-    y_pred_orig = gen.scaler.scaler_labels.inverse_transform(y_pred)
+    y_pred_orig = gen.label_scaler.inverse_transform(y_pred)
     
     return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig), np.array(video_type)
     
@@ -195,3 +241,5 @@ def print_stats(predictions, y_true, mode):
     print('Std of predicitons: ', np.std(predictions))
     print('\nMean difference between ground truth and predictions is: ', mean_difference)
     print('Mean difference between dummy estimator (voting always for mean of ground truth) and ground truth: ', mean_difference_dummy)
+
+

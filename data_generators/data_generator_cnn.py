@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from person_counting.data_generators.data_generators import Generator_CSVS
 from person_counting.data_generators.data_generators import *
 from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.utils.scaler import CSVScaler
+from person_counting.utils.scaler import FeatureScaler, LabelScaler
 from person_counting.utils.preprocessing import apply_file_filters
 
 class Generator_CSVS_CNN(Generator_CSVS):
@@ -25,14 +25,13 @@ class Generator_CSVS_CNN(Generator_CSVS):
         length_y            : Length of the feature's DataFrame in y direction
         file_names          : File names to be processed
         filter_cols_upper,  : Amount of columns to be filtered at end and start of DataFrame
-        filter_rows_factor  : Factor of rows to be filtered
         batch_size          : Batch size
         top_path            : Parent path where csv files are contained
         label_file          : Name of the label file
 
     '''
 
-    def __init__(self,*args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(Generator_CSVS_CNN, self).__init__(*args, **kwargs)
 
     def datagen(self):
@@ -48,13 +47,14 @@ class Generator_CSVS_CNN(Generator_CSVS):
         x_batch = np.zeros(shape=(self.batch_size,
                                 self.length_t,
                                 self.length_y, 
-                                1))
+                                2))
+                                
         y_batch = np.zeros(shape=(self.batch_size, 1))
 
         while True:
             for file_name in self.file_names:
                 try: 
-                    df_x, label = self.__getitem__(file_name)
+                    arr_x, label = self.__getitem__(file_name)
 
                 #Error messages for debugging purposes
                 except FileNotFoundError as e: 
@@ -63,7 +63,7 @@ class Generator_CSVS_CNN(Generator_CSVS):
                 except ValueError as e: 
                     continue
 
-                x_batch[batch_index,:,:,0] = df_x
+                x_batch[batch_index,:,:,:] = arr_x
                 y_batch[batch_index] = label
                 batch_index += 1
 
@@ -77,7 +77,7 @@ def create_datagen(top_path,
                    sample, 
                    label_file, 
                    augmentation_factor=0, 
-                   filter_hour_above=0, 
+                   filter_hour_above=24, 
                    filter_category_noisy=False): 
     '''
     Creates train and test data generators for lstm network. 
@@ -102,23 +102,25 @@ def create_datagen(top_path,
     print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(len(train_file_names), len(test_file_names)))
     
     #TODO: Should be mix of train and test file names
-    scaler = CSVScaler(top_path, label_file, train_file_names, sample, sample_size=100)
+    feature_scaler = FeatureScaler(top_path, train_file_names, sample, sample_size=7)
+    label_scaler = LabelScaler(top_path, label_file, train_file_names, sample)
 
-    gen_train = Generator_CSVS_CNN(length_t,
-                                   length_y,
-                                   train_file_names,
-                                   scaler=scaler, 
+    gen_train = Generator_CSVS_CNN(length_t=length_t,
+                                   length_y=length_y,
+                                   file_names=train_file_names,
+                                   feature_scaler=feature_scaler, 
+                                   label_scaler=label_scaler, 
                                    sample=sample,
                                    top_path=top_path,
                                    label_file=label_file, 
                                    augmentation_factor=augmentation_factor)
     
     #Don't do augmentation here!
-    gen_test = Generator_CSVS_CNN(length_t,
-                                  length_y,
-                                  test_file_names,
-                                  scaler=scaler, 
-                                  sample=sample,
+    gen_test = Generator_CSVS_CNN(length_t=length_t,
+                                  length_y=length_y,
+                                  file_names=test_file_names,
+                                  feature_scaler=feature_scaler, 
+                                  label_scaler=label_scaler,                                   sample=sample,
                                   top_path=top_path,
                                   label_file=label_file, 
                                   augmentation_factor=0)
