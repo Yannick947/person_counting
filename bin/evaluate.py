@@ -9,8 +9,8 @@ from tensorflow.core.util import event_pb2
 import pandas as pd
 import numpy as np 
 
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters, visualize_architecture
-from person_counting.data_generators.data_generators import get_entering, get_video_class, get_exiting
+from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters, save_confusion_matrix
+from person_counting.data_generators.data_generators import get_label, get_video_class, get_exiting
 
 CATEGORY_MAPPING = {0: 'normal_uncrowded', 1: 'normal_crowded', 2: 'noisy_uncrowded', 3: 'noisy_crowded'}
 
@@ -118,9 +118,15 @@ def parse_model(model, logdir):
     return model
 
 
-def evaluate_predictions(history, y_pred, y_pred_orig,
-                         y_true, y_true_orig, visualize,
-                         model, mode='Test', logdir=None, 
+def evaluate_predictions(history,
+                         y_pred,
+                         y_pred_orig,
+                         y_true,
+                         y_true_orig,
+                         visualize,
+                         model,
+                         mode='Test',
+                         logdir=None,
                          video_categories=None):
     '''Evaluate predictions of the best model
     Arguments: 
@@ -133,15 +139,14 @@ def evaluate_predictions(history, y_pred, y_pred_orig,
         mode: Mode ('Train', or 'Test')
         model: Last model created during training
         logdir: Directory where logging is done
-
     '''
-
     print_stats(y_pred_orig, y_true_orig, mode)
 
     if visualize == True:
         visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig, mode=mode, logdir=logdir, video_categories=video_categories)
         visualize_filters(model, logdir=logdir)
         plot_losses(history, logdir=logdir)
+        save_confusion_matrix(y_true_orig, y_pred_orig, logdir)
 
 
 def get_stats(y_true, predictions):
@@ -172,7 +177,7 @@ def create_mae_rescaled(scale_factor):
         return difference / scale_factor
 
     return mae_rescaled
-
+    
 
 def get_predictions(model, gen, top_path): 
     '''Generate predictions from generator and model
@@ -196,9 +201,9 @@ def get_predictions(model, gen, top_path):
     for file_name in gen.file_names: 
         try: 
             x = np.load(file_name)
-            x = gen.preprocessor.preprocess_features(x)
+            x = gen.preprocessor.preprocess_features(x, file_name)
 
-            y = get_entering(file_name, df_y)
+            y = get_label(file_name, df_y)
             y_true_orig.append(int(y.values[0]))
             y_processed = np.copy(gen.preprocessor.preprocess_labels(y))
 
@@ -241,5 +246,4 @@ def print_stats(predictions, y_true, mode):
     print('Std of predicitons: ', np.std(predictions))
     print('\nMean difference between ground truth and predictions is: ', mean_difference)
     print('Mean difference between dummy estimator (voting always for mean of ground truth) and ground truth: ', mean_difference_dummy)
-
 
