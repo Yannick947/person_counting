@@ -102,7 +102,7 @@ def create_datagen(top_path,
     print('Dataset contains: \n{} training csvs \n{} testing csvs'.format(len(train_file_names), len(test_file_names)))
     
     #TODO: Should be mix of train and test file names
-    feature_scaler = FeatureScaler(top_path, train_file_names, sample, sample_size=7)
+    feature_scaler = FeatureScaler(top_path, train_file_names, sample, sample_size=1000)
     label_scaler = LabelScaler(top_path, label_file, train_file_names, sample)
 
     gen_train = Generator_CSVS_CNN(length_t=length_t,
@@ -120,10 +120,11 @@ def create_datagen(top_path,
                                   length_y=length_y,
                                   file_names=test_file_names,
                                   feature_scaler=feature_scaler, 
-                                  label_scaler=label_scaler,                                   sample=sample,
+                                  label_scaler=label_scaler,
+                                  sample=sample,
                                   top_path=top_path,
                                   label_file=label_file, 
                                   augmentation_factor=0)
-
+    
     return gen_train, gen_test
 

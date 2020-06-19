@@ -77,7 +77,6 @@ def get_best_hparams(top_path):
                 'num_units'              : 99,
                 'filter_cols_factor'     : 1,
                 'pooling_type'           : 'avg',
-                'filter_rows_factor'     : 1,
                 'learning_rate'          : 0.018473,
                 'y_stride'               : 1,
                 'optimizer'              : 'Adam',

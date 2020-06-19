@@ -92,9 +92,9 @@ class Generator_CSVS(keras.utils.Sequence):
         else:
                 raise FileNotFoundError('Failed getting features for file {}'.format(file_name))
                 
-        arr_x = self.preprocessor.preprocess_features(arr_x)
+        arr_x = self.preprocessor.preprocess_features(arr_x, file_name)
 
-        label = get_entering(file_name, self.df_y)
+        label = get_label(file_name=file_name, df_y=self.df_y)
         label = self.preprocessor.preprocess_labels(label)
 
         self.file_names_processed.append(file_name)
@@ -141,7 +141,14 @@ class Generator_CSVS(keras.utils.Sequence):
     def get_file_names_processed(self):
         return self.file_names_processed
 
-        
+def get_label(file_name, df_y):
+    if 'back_out' in file_name:
+        return get_exiting(file_name, df_y)
+    elif 'front_in' in file_name:
+        return get_entering(file_name, df_y)
+    else: 
+        raise FileNotFoundError        
+
 def get_feature_file_names(top_path): 
     '''
     Get names of all npy files for training
@@ -188,21 +195,15 @@ def get_entering(file_name, df_y):
 
         returns: Label for given features
     '''
+    search_str = file_name.replace('\\', '/').replace('\\', '/')
+    
+    if 'front_in' in file_name:
+        search_str = search_str[search_str.find('front_in'):]
+    else: 
+        search_str = search_str[search_str.find('back_out'):]
 
-    try: 
-        search_str = file_name.replace('\\', '/').replace('\\', '/')
-        
-        if 'front_in' in file_name:
-            search_str = search_str[search_str.find('front_in'):]
-        else: 
-            search_str = search_str[search_str.find('back_out'):]
-
-        entering = df_y.loc[df_y.file_name == search_str].entering
-        return entering 
-
-    except Exception as e:
-        # print('No matching label found for existing npy file')
-        return None
+    entering = df_y.loc[df_y.file_name == search_str].entering
+    return entering
 
 
 def get_exiting(file_name, df_y): 
@@ -214,20 +215,16 @@ def get_exiting(file_name, df_y):
 
         returns: DF wit h exiting persons for given file
     '''
-    try: 
-        search_str = file_name.replace('\\', '/').replace('\\', '/')
-        
-        if 'front_in' in file_name:
-            search_str = search_str[search_str.find('front_in'):]
-        else: 
-            search_str = search_str[search_str.find('back_out'):]
+    search_str = file_name.replace('\\', '/').replace('\\', '/')
+    
+    if 'front_in' in file_name:
+        search_str = search_str[search_str.find('front_in'):]
+    else: 
+        search_str = search_str[search_str.find('back_out'):]
 
-        entering = df_y.loc[df_y.file_name == search_str].exiting
-        return entering 
+    entering = df_y.loc[df_y.file_name == search_str].exiting
+    return entering 
 
-    except Exception as e:
-        # print('No matching label found for existing npy file')
-        return None
 
 def get_video_class(file_name, df_y):
     '''Get video type  

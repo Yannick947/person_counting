@@ -89,7 +89,6 @@ def get_samples(args):
                   'batch_size'          : [32, 64, 128, 256], 
                   'num_units_l1'        : [i for i in range(3, 10)],
                   'num_units_l2'        : [i for i in range(1, 5)],
-                  'filter_rows_factor'  : [1],
                   'activation'          : ['relu']
                 }
 

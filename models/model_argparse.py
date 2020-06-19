@@ -7,7 +7,7 @@ def parse_args(args):
     parser = argparse.ArgumentParser(description='Parsing Arguments for training model on video detected data')
     parser.add_argument('--n-runs',                 help='Number of samples which shall be chosen randomly from hyperparameter serach space', default=50, type=int)
     parser.add_argument('--topdir-log',             help='The parent directory for logging tensorboard data', default='tensorboard/')
-    parser.add_argument('--top-path',               help='The parent directory where csv feature and label files are stored', default='C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/')
+    parser.add_argument('--top-path',               help='The parent directory where csv feature and label files are stored', default='C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected_100pcdsimgs_frontinonly/')
     parser.add_argument('--label-file',             help='The name of the label file', default='pcds_dataset_labels_united.csv')
     parser.add_argument('--filter-rows-factor',     help="The factor for filtering rows (3 indicates every third row will be left after filtering", type=int)
     parser.add_argument('--filter-cols-upper',      help='Removes this total amount of columns from the upper boundary of the images',  type=int)
@@ -19,3 +19,7 @@ def parse_args(args):
     parser.add_argument('--filter-hour-above',      help='Filter videos which are after this hour during the day due to darkness', type=int, default=0)
     parser.add_argument('--epochs',                 help='Number of epochs to train', type=int, default=50)
     return parser.parse_args(args)
+
+def check_args(args): 
+    if args.augmentation_factor > 0: 
+        print('Care using Augmentation, significante performance deacreases might be possible depneding on the size of your data')

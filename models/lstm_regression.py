@@ -112,7 +112,6 @@ def get_samples(args):
                   'filter_cols_lower'   : [i for i in range(12, 17)],
                   'batch_size'          : [32, 64, 128, 256], 
                   'num_units'           : [i for i in range(30, 200)], 
-                  'filter_rows_factor'  : [1],
                   'activation'          : ['sigmoid', 'relu']
                 }
 

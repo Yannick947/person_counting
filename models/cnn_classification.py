@@ -19,7 +19,7 @@ from person_counting.utils.hyperparam_utils     import create_callbacks, get_opt
 from person_counting.models.model_argparse      import parse_args
 from person_counting.bin.evaluate_cls           import evaluate_run_cls, f1
 from person_counting.utils.preprocessing        import get_filtered_lengths
-from person_counting.models.cnn_regression      import squeeze_dim4, squeeze_dim4_shape
+from person_counting.models.cnn_regression      import squeeze_dim3, squeeze_dim3_shape
 
 
 def main(args=None):
@@ -74,12 +74,10 @@ def get_samples(args):
                   'layer_number'        : [1, 2, 3], 
                   'batch_normalization' : [False, True],
                   'regularization'      : [0], 
-                  'filter_rows_lower'   : [i for i in range(150)], 
                   'filter_cols_upper'   : [i for i in range(15, 35)], 
                   'filter_cols_lower'   : [i for i in range(15, 30)],
-                  'filter_rows_factor'  : [1],
                   'batch_size'          : [32, 64, 128], 
-                  'units'               : [i for i in range(2,10)],
+                  'units'               : [i for i in range(2,14)],
                   'loss'                : ['categorical_crossentropy'],
                 }
 
@@ -166,8 +164,9 @@ def create_cnn(timesteps, features, hparams, num_classes):
 
     for _ in range(hparams['layer_number']):
         try:
-            layers.append(create_pool_layer()(layers[-1]))
             layers.append(create_conv_layer()(layers[-1]))
+            layers.append(create_conv_layer()(layers[-1]))
+            layers.append(create_pool_layer()(layers[-1]))
 
         except ValueError:
             #Creation failed, hparam must be adjusted for logging
