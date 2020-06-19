@@ -83,7 +83,7 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
                          logdir=logdir, video_categories=video_cats)
-
+    
 def parse_model(model, logdir):
     ''' Parse logdir for best model
     Arguments: 
