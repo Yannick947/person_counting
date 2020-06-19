@@ -26,11 +26,11 @@ class Preprocessor(object):
         self.feature_scaler = feature_scaler
         self.label_scaler = label_scaler
 
-    def preprocess_features(self, arr): 
+    def preprocess_features(self, arr, file_name): 
         '''Preprocess features
         Arguments: 
             arr: Numpy array with features
-
+            file_name: Path of the feature frame file
         returns preprocessed numpy array
         '''
 
@@ -44,12 +44,16 @@ class Preprocessor(object):
         if self.feature_scaler is not None:
             arr = self.feature_scaler.transform(arr)
 
+        if 'back_out' in file_name: 
+            arr = np.flip(arr, axis=1)
+
         assert arr is not None, 'Scaling or augmentation went wrong, check implementation'
-        
+
         assert arr.shape[0] == (self.length_t)\
            and arr.shape[1] == (self.length_y)\
            and arr.shape[2] == 2,\
            'Shapes are not consistent for feature data frame'
+
         return arr
 
 
