@@ -41,7 +41,7 @@ def main(args=None):
                                                              args.filter_hour_above, 
                                                              args.filter_category_noisy)
 
-        rescale_factor = datagen_train.scaler.scaler_labels.scale_
+        rescale_factor = datagen_train.label_scaler.scale_
         print('Using rescale factor ', rescale_factor)
 
         logdir = os.path.join(args.topdir_log + '_cnn_' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
@@ -69,22 +69,23 @@ def get_samples(args):
     #Put values multiple times into list to increase probability to be chosen
     param_grid = {
                   'pooling_type'        : ['avg', 'max'],
-                  'kernel_size'         : [i for i in range(3, 5)],
-                  'kernel_number'       : [i for i in range(2,5)],
+                  'kernel_size'         : [i for i in range(3, 6)],
+                  'kernel_number'       : [i for i in range(2,6)],
                   'pool_size_y'         : [2],
                   'pool_size_x'         : [2, 3],
                   'learning_rate'       : loguniform.rvs(a=1e-4, b=1e-2, size=100000),
                   'optimizer'           : ['Adam'], 
                   'layer_number'        : [2, 3, 4], 
                   'batch_normalization' : [False, True],
-                  'regularization'      : [0], 
-                  'filter_rows_lower'   : [i for i in range(150)], 
-                  'filter_cols_upper'   : [i for i in range(15, 35)], 
-                  'filter_cols_lower'   : [i for i in range(15, 25)],
+                  'regularization'      : [0, 0.01, 0.05], 
+                  'filter_rows_lower'   : [0], 
+                  'filter_cols_upper'   : [i for i in range(5, 35)], 
+                  'filter_cols_lower'   : [i for i in range(5, 25)],
                   'batch_size'          : [32, 64, 128], 
                   'loss'                : ['msle', 'mae'], 
                   'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
-                  'units'               : [i for i in range(4,15)],                  
+                  'units'               : [i for i in range(4,15)],          
+                  'squeeze_method'      : ['global_avg_pool', 'global_max_pool', 'squeeze']
                 }
 
     randint = int(tf.random.uniform(shape=[], minval=0, maxval=10, dtype=tf.dtypes.int32, seed=None))
@@ -123,10 +124,8 @@ def train(model,
     
     #Add num params parameter only for logging purposes
     hparams['number_params'] = model.count_params()
-    max_metrics = {
-                    'epoch_mae_rescaled': 'min',
-                    'epoch_msle'        : 'min', 
-                    }
+    max_metrics = {'epoch_mae_rescaled': 'min',
+                   'epoch_msle'        : 'min'}
 
     history = model.fit_generator(validation_steps=int(len(datagen_test)),
                                   generator=datagen_train.datagen(),
@@ -189,8 +188,9 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
 
     for _ in range(hparams['layer_number']):
         try:
-            layers.append(create_pool_layer()(layers[-1]))
             layers.append(create_conv_layer()(layers[-1]))
+            layers.append(create_conv_layer()(layers[-1]))
+            layers.append(create_pool_layer()(layers[-1]))
 
         except ValueError:
             #Creation failed, hparam must be adjusted for logging
@@ -198,8 +198,16 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
             print('Tried to create a Pool Layer that is not possible to create,',
                   'because it would lead to negative dimensions. Creation was skipped')
     
-    #Squeeze 4th dimension and pass to time-series module
-    layers.append(Lambda(squeeze_dim4, output_shape = squeeze_dim4_shape)(layers[-1]))
+    #Use 1x1 Convolution to remove depth of model
+    if hparams['squeeze_method'] == '1x1_conv':
+        layers.append(Conv2D(1, 1, use_bias=True, activation='relu', padding='same')(layers[-1]))
+        newdim = tuple([x for x in layers[-1].shape.as_list() if x != 1 and x is not None])
+        layers.append(Reshape(newdim)(layers[-1]))
+
+    else:
+        #Squeeze 4th dimension and pass to time-series without loosing information
+        layers.append(Lambda(squeeze_dim3, output_shape = squeeze_dim3_shape)(layers[-1]))
+
     layers.append(create_rnn_layer(return_sequences=True)(layers[-1]))
     layers.append(create_rnn_layer(return_sequences=False)(layers[-1]))
     layers.append(Dense(1, activation=keras.activations.hard_sigmoid, kernel_regularizer=keras.regularizers.l2(hparams['regularization']))(layers[-1]))
@@ -208,20 +216,20 @@ def create_cnn(timesteps, features, hparams, rescale_factor):
     mae_rescaled = create_mae_rescaled(rescale_factor)
 
     optimizer = get_optimizer(hparams['optimizer'], hparams['learning_rate'])
-    model.compile(loss=hparams['loss'], metrics=['msle', mae_rescaled], optimizer=optimizer)
+    model.compile(loss=hparams['loss'], metrics=['msle', mae_rescaled, 'accuracy'], optimizer=optimizer)
     model.summary()
 
     return model
 
 
-def squeeze_dim4(x4d):
-    shape = tf.shape( x4d ) # get dynamic tensor shape
-    x3d = tf.reshape( x4d, [shape[0], shape[1], shape[2] * shape[3]])
+def squeeze_dim3(x3d):
+    shape = tf.shape( x3d ) # get dynamic tensor shape
+    x3d = tf.reshape( x3d, [shape[0], shape[1], shape[2] * shape[3]])
     return x3d
 
 
-def squeeze_dim4_shape(x4d_shape):
-    in_batch, in_rows, in_cols, in_filters = x4d_shape
+def squeeze_dim3_shape(x3d_shape):
+    in_batch, in_rows, in_cols, in_filters = x3d_shape
     if ( None in [ in_rows, in_cols] ) :
         output_shape = (in_batch, None, in_filters)
     else :
