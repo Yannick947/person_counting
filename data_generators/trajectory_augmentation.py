@@ -21,13 +21,13 @@ def time_measure(method):
     return timed
 
 #For testing the performance, comment in the decorator to measure time for execution
-@time_measure
-def augment_trajectory(df, aug_factor=0.1): 
+def augment_trajectory(arr, aug_factor=0.1): 
     '''Augment a trajectory by moving certain pixels which are detections
     into random directions
     '''
-    print('Care using Augmentation, significante performance deacreases might be possible')
-    
+    #TODO: Transform everything to np array
+    df = pd.DataFrame(arr, columns=None)
+
     #Get list of indices and sample subset 
     indices = get_indices_detections(df)
     indices_sampled = random.sample(indices, math.ceil(len(indices) * aug_factor))
@@ -37,6 +37,7 @@ def augment_trajectory(df, aug_factor=0.1):
         new_dest = get_destination(df, index_tuple, indices)
         df = move_pixel(df, index_tuple, new_dest)
     
+    assert arr.shape == df.shape, 'Augmentation went wrong, check implementation'
     return df
 
 
