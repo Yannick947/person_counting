@@ -47,20 +47,23 @@ class FeatureScaler(MinMaxScaler):
             full_path = os.path.join(self.top_path, self.file_names.iloc[i])
             try: 
                 arr = np.load(full_path)
+            
+                if self.min_feature > np.min(arr[np.nonzero(arr)]): 
+                    self.min_feature = np.min(arr[np.nonzero(arr)])
+            
+                if self.max_feature < np.max(arr[np.nonzero(arr)]):
+                    self.max_feature = np.max(arr[np.nonzero(arr)])
+                
             except: 
+                # TODO: Care about strange colab error in "> np.min(arr[...])"
+                print(arr.shape, '\n', full_path, True in np.isnan(arr))
                 continue
 
-            if self.min_feature > np.min(arr[np.nonzero(arr)]): 
-                self.min_feature = np.min(arr[np.nonzero(arr)])
-           
-            if self.max_feature < np.max(arr[np.nonzero(arr)]):
-                 self.max_feature = np.max(arr[np.nonzero(arr)])
-    
-    def transform(self, X, min_max_range=(0, 1)):
+    def transform(self, arr, min_max_range=(0, 1)):
         mi, ma = min_max_range
-        X_std = (X - self.min_feature) / (self.max_feature - self.min_feature)
-        X_scaled = X_std * (ma - mi) + mi
-        return X_scaled
+        arr_std = np.where(arr > 0, (arr - self.min_feature) / (self.max_feature - self.min_feature), arr)
+        arr_scaled = arr_std * (ma - mi) + mi
+        return arr_scaled
 
 
 class LabelScaler(MinMaxScaler):
