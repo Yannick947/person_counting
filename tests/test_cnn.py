@@ -19,19 +19,18 @@ from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.data_generators import data_generator_cnn_classification as dg_cls
 from person_counting.bin.evaluate import evaluate_run
 from person_counting.bin.evaluate_cls import evaluate_run_cls
-from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.utils.preprocessing import get_video_daytime
-
+from person_counting.utils.preprocessing import get_filtered_lengths, get_video_daytime
+from person_counting.utils.visualization_utils import visualize_input_2d, visualize_input_3d
 
 label_file = 'pcds_dataset_labels_united.csv'
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
 def main():
     if sys.argv[1] == 'train_best_cpu': 
-        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcdsdataset_detected/'
+        top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
         workers = 1
         multi_processing = False
-        train_best(workers, multi_processing, top_path, epochs=1)
+        train_best(workers, multi_processing, top_path, epochs=0)
 
     elif sys.argv[1] == 'train_best_gpu':
         top_path = '/content/drive/My Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
@@ -60,12 +59,15 @@ def show_feature_frames(top_path):
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                          sample=hparams,
                                                          label_file=label_file, 
-                                                         augmentation_factor=0.1, 
-                                                         filter_hour_above=23, 
-                                                         filter_category_noisy=False)
+                                                         augmentation_factor=0.0, 
+                                                         filter_hour_above=8, 
+                                                         filter_category_noisy=True)
+
+    pool_model = create_pooling_model(hparams, timestep_num, feature_num)
     for datagen in [datagen_test, datagen_train]:                                                   
         gen = datagen.datagen()
         sns.set()
+
         for _ in range(8):
             with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
                 datagen.reset_file_names_processed() 
@@ -74,27 +76,14 @@ def show_feature_frames(top_path):
                 daytime = get_video_daytime(file_names[0])
 
                 print('Video name: ', file_names[0])
-                print('Label: ', datagen.scaler.scaler_labels.inverse_transform(label)[0])
+                print('Label: ', datagen.label_scaler.inverse_transform(label)[0])
                 print('Daytime of video: ', daytime[0], ':', daytime[1], '\n')
-
-                fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(8, 4))
-                sns.heatmap(data=feature_frame[0, :, :, 0], vmin=0, vmax=1, ax=ax1)
-                
-                kernel = np.ones((2,3), np.uint8)
-                opening = cv.dilate(feature_frame[0, :, :, 0], kernel)
-                kernel = np.ones((2,2), np.uint8)
-                opening = cv.erode(opening, kernel)
-                sns.heatmap(data=opening, ax=ax2)
-
-                pool_model = create_pooling_model(hparams, timestep_num, feature_num)
-                pooled_frame = pool_model.predict(feature_frame)
-                sns.heatmap(data=pooled_frame[0, :, :, 0], vmin=0, ax=ax3)
-
-                plt.show()
-
+               
+                visualize_input_3d(feature_frame, pool_model, save_plots=False)
+                visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=True)
 
 def create_pooling_model(hparams, timesteps, features): 
-    input_layer = Input(shape=((timesteps, features, 1)))
+    input_layer = Input(shape=((timesteps, features, 2)))
 
     if hparams['pooling_type'] == 'avg': 
         pooling = AveragePooling2D(pool_size=(hparams['pool_size_x'], hparams['pool_size_y'])) (input_layer)
@@ -195,7 +184,7 @@ def train_best(workers, multi_processing, top_path, epochs=25):
     datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                          sample=hparams,
                                                          label_file=label_file,
-                                                         filter_hour_above=24)
+                                                         filter_hour_above=9)
 
     cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_)
     history, cnn_model = cnn.train(cnn_model,
@@ -244,18 +233,18 @@ def train_best_cls(workers, multi_processing, top_path, epochs=25):
 
 def get_best_hparams(top_path):
     '''Set best hyperparameter set from prior tuning session
+    
     Arguments: 
         top_path: Parent directory where shall be searched for csv files
-
     '''
+
     hparams = {
                 'kernel_number'          : 5,
                 'batch_size'             : 1,
                 'regularization'         : 0.1,
-                'filter_cols_upper'      : 35,
+                'filter_cols_upper'      : 0,
                 'layer_number'           : 1,
                 'kernel_size'            : 4,
-                'filter_cols_factor'     : 1,
                 'pooling_type'           : 'max',
                 'learning_rate'          : 0.0029459,
                 'y_stride'               : 1,
@@ -263,13 +252,14 @@ def get_best_hparams(top_path):
                 'pool_size_x'            : 2,
                 'pool_size_y'            : 2,
                 'batch_normalization'    : False, 
-                'filter_cols_lower'      : 25,
+                'filter_cols_lower'      : 0,
                 'augmentation_factor'    : 0,
-                'filter_rows_lower'      : 150, 
-                'pool_size_y_factor'     : 0.01, 
+                'filter_rows_lower'      : 0, 
+                'pool_size_y_factor'     : 0, 
                 'units'                  : 5,
                 'loss'                   : 'msle',
                 'Recurrent_Celltype'     : 'GRU',
+                'squeeze_method'         : '1x1_conv',
               }
               
     timestep_num, feature_num = get_filtered_lengths(top_path=top_path, sample=hparams)
