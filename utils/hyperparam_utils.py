@@ -4,6 +4,7 @@ import tensorflow as tf
 import keras 
 from tensorboard.plugins.hparams import api as hp
 
+from person_counting.bin.evaluate import Evaluate
 
 def hard_tanh(x): 
     '''Hard tanh function
@@ -72,7 +73,7 @@ def get_static_hparams(args):
     return logging_ret
 
 
-def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=False): 
+def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=False, max_metrics=None): 
     '''Creates keras callbacks for training
 
     Arguments: 
@@ -92,7 +93,8 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
             update_freq            = 128, 
             profile_batch          = 0, 
             write_graph            = True,
-            write_grads            = False
+            write_grads            = False, 
+            histogram_freq         = 0,
         )
         
     callbacks.append(tensorboard_callback)
@@ -118,7 +120,11 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
             min_lr     = 1e-8
         ))
 
+    for name, mode in max_metrics.items(): 
+        callbacks.append(Evaluate(name, mode, logdir))
+
     return callbacks
+
 
 
 
