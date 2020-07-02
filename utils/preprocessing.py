@@ -44,9 +44,6 @@ class Preprocessor(object):
         if self.feature_scaler is not None:
             arr = self.feature_scaler.transform(arr)
 
-        if 'back_out' in file_name: 
-            arr = np.flip(arr, axis=1)
-
         assert arr is not None, 'Scaling or augmentation went wrong, check implementation'
 
         assert arr.shape[0] == (self.length_t)\

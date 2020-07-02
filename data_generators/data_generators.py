@@ -5,6 +5,7 @@ import numpy as np
 import math
 import abc
 from random import shuffle
+import random 
 
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
@@ -13,7 +14,8 @@ from person_counting.models.model_argparse import parse_args
 from person_counting.utils import preprocessing as pp
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 
-TEST_SIZE = 0.25
+VAL_SIZE = 0.2
+TEST_SIZE = 0.1
 
 class Generator_CSVS(keras.utils.Sequence):
     '''Abstract class for Generators to load npy files from 
@@ -30,7 +32,8 @@ class Generator_CSVS(keras.utils.Sequence):
                  label_file, 
                  feature_scaler,
                  label_scaler,
-                 augmentation_factor=0): 
+                 augmentation_factor=0, 
+                 inverse_probability=0.5): 
 
         ''' Initialize Generator object.
 
@@ -62,6 +65,7 @@ class Generator_CSVS(keras.utils.Sequence):
         self.unfiltered_length_t, self.unfiltered_length_y = pp.get_lengths(self.top_path)
         self.preprocessor           = pp.Preprocessor(length_t, length_y, top_path, sample, feature_scaler, label_scaler, augmentation_factor)
         self.df_y                   = self.load_label_file()
+        self.inverse_probability    = inverse_probability
 
     @abc.abstractmethod
     def datagen(self):
@@ -94,7 +98,22 @@ class Generator_CSVS(keras.utils.Sequence):
                 
         arr_x = self.preprocessor.preprocess_features(arr_x, file_name)
 
-        label = get_label(file_name=file_name, df_y=self.df_y)
+        #inverse case is getting the label entering for back out with flipped input and exiting for front in 
+        #labels have to be inverted according to both parameters (4 cases)
+        if random.uniform(0.0, 1.0) < self.inverse_probability: 
+            if 'back_out' in file_name: 
+                label = get_label(file_name=file_name, df_y=self.df_y, inverse=True)
+            else: 
+                arr_x = np.flip(arr_x, axis=1)
+                label = get_label(file_name=file_name, df_y=self.df_y, inverse=True)
+
+        else: 
+            if 'front_in' in file_name: 
+                label = get_label(file_name=file_name, df_y=self.df_y, inverse=False)
+            else: 
+                arr_x = np.flip(arr_x, axis=1)
+                label = get_label(file_name=file_name, df_y=self.df_y, inverse=False)
+
         label = self.preprocessor.preprocess_labels(label)
 
         self.file_names_processed.append(file_name)
@@ -118,6 +137,8 @@ class Generator_CSVS(keras.utils.Sequence):
             return None
 
     def load_label_file(self):
+        """Loads the label file as DataFrame
+        """
         df_y = pd.read_csv(self.top_path + self.label_file, header=None, names=LABEL_HEADER)
         df_y['file_name'] = df_y['file_name'].apply(lambda row: row[:-4] + '.npy')
         return df_y
@@ -133,21 +154,44 @@ class Generator_CSVS(keras.utils.Sequence):
         self.labels = list()
 
     def get_file_names(self):
+        """Get all file names used of this generator
+        """
         return self.file_names
 
     def reset_file_names_processed(self): 
+        """Reset the filenames which were processed since last execution  of this function
+        """
         self.file_names_processed = list()
     
     def get_file_names_processed(self):
+        """Gets the file names which were processed since last execution of reset_file_names_processed
+        """
         return self.file_names_processed
 
-def get_label(file_name, df_y):
-    if 'back_out' in file_name:
+
+def get_label(file_name, df_y, inverse=False):
+    """ Get the label for a given file
+    Arguments: 
+        file_name: Name of the file for training 
+        df_y: Dataframe with labels for corresponding file names
+        inverse: If the input array was flipped before so the opposite 
+                 label shall be loaded 
+
+    returns an int indicating the label 
+    """
+    if (('back_out' in file_name) and (inverse is False)) or\
+       (('front_in' in file_name) and (inverse is True)):
+
         return get_exiting(file_name, df_y)
-    elif 'front_in' in file_name:
+
+    elif (('front_in' in file_name) and (inverse is False)) or\
+         (('back_out' in file_name) and (inverse is True)):
+
         return get_entering(file_name, df_y)
+
     else: 
-        raise FileNotFoundError        
+        raise FileNotFoundError  
+
 
 def get_feature_file_names(top_path): 
     '''
@@ -167,23 +211,22 @@ def get_feature_file_names(top_path):
 def split_files(top_path, label_file):
     ''' Splits all files in the training set into train and test files
     and returns lists of names for train and test files
-    #TODO: Split files according to the categories equally distributed
+    # TODO: Split files according to the categories equally distributed (stratified)
     '''
 
     df_names = pd.Series(get_feature_file_names(top_path))
     #replace .avi with .npy
     df_names = df_names.apply(lambda row: row[:-4] + '.npy')
     train, test = train_test_split(df_names,
-                                   train_size= 1-TEST_SIZE,
-                                   test_size=TEST_SIZE,
-                                   random_state=10)
-    return train, test
-            
-def get_filters(file_names):
-    '''Searches for the right columns amount of columns and rows to drop
-    '''
-    #TODO: Implement. Now dummy function
-    raise NotImplementedError
+                                   train_size= 1-TEST_SIZE - VAL_SIZE,
+                                   test_size=TEST_SIZE + VAL_SIZE,
+                                   random_state=42)
+    
+    validation, test = train_test_split(test,
+                                        train_size=VAL_SIZE / (VAL_SIZE + TEST_SIZE),
+                                        test_size=TEST_SIZE / (VAL_SIZE + TEST_SIZE), 
+                                        random_state=42)
+    return train, validation, test
 
 
 def get_entering(file_name, df_y): 
