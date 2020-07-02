@@ -17,8 +17,11 @@ plt.style.use('ggplot')
 def visualize_predictions(**kwargs):
     '''Visualize predictions over ground truth
     '''
+    plt.clf()
     scatterplot(**kwargs)
+    plt.clf()
     violinplot(**kwargs)
+    plt.clf()
     boxplot(**kwargs)
 
 def add_plot_attributes(method):
@@ -27,7 +30,6 @@ def add_plot_attributes(method):
         figure = plt.figure()
         plt.subplot(1,1,1)
         method(y_pred, y_true, mode, logdir, video_categories)
-        plt.title('Predictions over ground truth')
         plt.xlabel('Ground truth')
         plt.ylabel('Predictions')
 
@@ -36,7 +38,6 @@ def add_plot_attributes(method):
 
         plt.yticks(np.arange(min(np.append(y_pred, y_true)),
                             max(np.append(y_pred , y_true))))
-        plt.title('{} for {} predictions'.format(method_name, mode))
 
         if logdir is not None:
             save_name = os.path.join(logdir, '{}_{}_Pred_GT.png'.format(mode, method_name))
@@ -72,12 +73,12 @@ def plot_losses(history, logdir=None):
     figure = plt.figure()
     plt.subplot(1, 1, 1)
     for key in history.history.keys():
-        plt.plot(history.history[key], label=key)
+        if (not '_max' in key) and (not '_rescaled' in key):
+            plt.plot(history.history[key], label=key)
 
-    plt.legend()
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
+               fancybox=True, shadow=True, ncol=2)
     plt.yscale('log')
-    figure.suptitle('Losses')
-
     plt.show()
     if logdir is not None:
         figure.savefig(os.path.join(logdir, 'losses'))
@@ -98,7 +99,6 @@ def visualize_filters(model, logdir=None):
             f_min, f_max = filters.min(), filters.max()
             filters = (filters - f_min) / (f_max - f_min)
             figure = plt.figure()
-            plt.subplots_adjust(hspace=0.5)
 
             for i in range(int(filters.shape[3])):
                 f = filters[:, :, :, i]
@@ -106,7 +106,7 @@ def visualize_filters(model, logdir=None):
                 plt.imshow(f[:, :, 0], cmap='gray')
                 figure.add_axes(ax)
 
-            figure.suptitle('Convolutional filter for layer{}'.format(il))
+            plt.subplots_adjust(hspace=0.9)
             save_name = os.path.join(logdir, 'filters_layer{}.png'.format(il))
             figure.savefig(save_name, dpi=1200)
             plt.show()
@@ -116,8 +116,8 @@ def visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, sav
     dimensions = feature_frame.shape[3]
     fig, axs = plt.subplots(nrows=1,
                             ncols=dimensions * 2, 
-                            figsize=(10 * dimensions * 2 ,
-                                     10 * (timestep_num / feature_num) * 0.3))
+                            figsize=(3 * dimensions * 2 ,
+                                     3 * (timestep_num / feature_num) * 0.3))
 
     for dim in range(dimensions):
         sns.heatmap(data=feature_frame[0, :, :, dim], vmin=0, vmax=1, ax=axs[dim * 2], cbar=False)
@@ -141,8 +141,6 @@ def visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, sav
 def visualize_input_3d(feature_frame, pool_model, save_plots=False):
     """ Visualize input in 3D (time, x, y)
     """
- 
-    pooled_frame = pool_model.predict(feature_frame)
     indices = np.argwhere(feature_frame[0, :,:,:] > 0)
     t = [i[0] for i in indices]
     dim1 = [i[1] for i in indices]
@@ -212,8 +210,10 @@ def set_titles(axs, fig, feature_num, timestep_num):
 
 def save_confusion_matrix(y_true, y_pred, logdir):
     plt.clf()
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10,10))
     y_pred = np.rint(y_pred)
     mat = confusion_matrix(y_true, y_pred, labels=np.sort(np.unique(y_true)))
-    sns.heatmap(data=mat, vmin=0, vmax=1, annot=True)
+    sns.heatmap(data=mat, annot=True, linewidths=.8)
+    plt.xlabel('PredictionsGround truth')
+    plt.ylabel('Ground truth')
     fig.savefig(os.path.join(logdir, 'confusion_matrix.png'), format='png', dpi=fig.dpi)
