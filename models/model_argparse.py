@@ -18,8 +18,9 @@ def parse_args(args):
     parser.add_argument('--filter-category-noisy',  help='If set to true, category noisy will not be loaded to the dataset', action='store_true', default=False)
     parser.add_argument('--filter-hour-above',      help='Filter videos which are after this hour during the day due to darkness', type=int, default=0)
     parser.add_argument('--epochs',                 help='Number of epochs to train', type=int, default=50)
+    parser.add_argument('--warm-start-path',        help='Starting from the best current available snapshot in the provided folder', default='None')
     return parser.parse_args(args)
 
 def check_args(args): 
     if args.augmentation_factor > 0: 
-        print('Care using Augmentation, significante performance deacreases might be possible depneding on the size of your data')
+        print('Care using Augmentation, significant performance deacreases might be possible depneding on the size of your data')
