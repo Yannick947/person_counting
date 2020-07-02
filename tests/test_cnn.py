@@ -56,12 +56,12 @@ def main():
 def show_feature_frames(top_path):
     #Put the params you want to visualize below in the get_best_params function
     hparams, timestep_num, feature_num = get_best_hparams(top_path)
-    datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
-                                                         sample=hparams,
-                                                         label_file=label_file, 
-                                                         augmentation_factor=0.0, 
-                                                         filter_hour_above=8, 
-                                                         filter_category_noisy=True)
+    datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
+                                                                            sample=hparams,
+                                                                            label_file=label_file, 
+                                                                            augmentation_factor=0.0, 
+                                                                            filter_hour_above=8, 
+                                                                            filter_category_noisy=True)
 
     pool_model = create_pooling_model(hparams, timestep_num, feature_num)
     for datagen in [datagen_test, datagen_train]:                                                   
@@ -79,8 +79,8 @@ def show_feature_frames(top_path):
                 print('Label: ', datagen.label_scaler.inverse_transform(label)[0])
                 print('Daytime of video: ', daytime[0], ':', daytime[1], '\n')
                
-                visualize_input_3d(feature_frame, pool_model, save_plots=False)
-                visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=True)
+                # visualize_input_3d(feature_frame, pool_model, save_plots=False)
+                visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=False)
 
 def create_pooling_model(hparams, timesteps, features): 
     input_layer = Input(shape=((timesteps, features, 2)))
@@ -181,12 +181,13 @@ def train_best(workers, multi_processing, top_path, epochs=25):
     '''
     hparams, timestep_num, feature_num = get_best_hparams(top_path)
 
-    datagen_train, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
-                                                         sample=hparams,
-                                                         label_file=label_file,
-                                                         filter_hour_above=9)
+    datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
+                                                                             sample=hparams,
+                                                                             label_file=label_file,
+                                                                             filter_hour_above=9)
+    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_,
+                               snap_path='C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/full_data/t1_2020-06-30-11-41-16_cnn_2020_Jun_30_14_07_46')
 
-    cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_)
     history, cnn_model = cnn.train(cnn_model,
                                    datagen_train,
                                    './',
@@ -196,7 +197,7 @@ def train_best(workers, multi_processing, top_path, epochs=25):
                                    use_multiprocessing=multi_processing, 
                                    epochs=epochs)
 
-    for gen, mode in zip([datagen_train, datagen_test], ['train', 'test']):
+    for gen, mode in zip([datagen_validation, datagen_test], ['validation', 'test']):
         evaluate_run(cnn_model, history, gen, mode=mode, logdir='./', visualize=True, top_path=top_path)
 
     return cnn_model, history
@@ -240,10 +241,10 @@ def get_best_hparams(top_path):
 
     hparams = {
                 'kernel_number'          : 5,
-                'batch_size'             : 1,
+                'batch_size'             : 16,
                 'regularization'         : 0.1,
                 'filter_cols_upper'      : 0,
-                'layer_number'           : 1,
+                'layer_number'           : 5,
                 'kernel_size'            : 4,
                 'pooling_type'           : 'max',
                 'learning_rate'          : 0.0029459,
@@ -258,7 +259,7 @@ def get_best_hparams(top_path):
                 'pool_size_y_factor'     : 0, 
                 'units'                  : 5,
                 'loss'                   : 'msle',
-                'Recurrent_Celltype'     : 'GRU',
+                'Recurrent_Celltype'     : 'LSTM',
                 'squeeze_method'         : '1x1_conv',
               }
               
