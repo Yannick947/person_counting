@@ -3,6 +3,7 @@ import os
 import tensorflow as tf
 import keras 
 from tensorboard.plugins.hparams import api as hp
+from datetime import datetime
 
 from person_counting.bin.evaluate import Evaluate
 
@@ -58,10 +59,7 @@ def get_static_hparams(args):
     '''
     logging_ret = dict()
     LOGGING_ARGS = [
-                    'filter_cols_upper',
                     'batch_size',
-                    'filter_cols_factor',
-                    'filter_cols_lower', 
                     'filter_hour_above',
                     'filter_category_noisy',
                     ]
@@ -69,6 +67,13 @@ def get_static_hparams(args):
     for key in LOGGING_ARGS:
         if vars(args)[key] is not None: 
             logging_ret[key] = vars(args)[key]
+
+    logging_ret['date'] = int(datetime.now().strftime("%m%d%H"))
+
+    if args.warm_start_path is not None: 
+        logging_ret['warm_start'] = True
+    else: 
+        logging_ret['warm_start'] = False
 
     return logging_ret
 
@@ -92,9 +97,9 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
             log_dir                = logdir,
             update_freq            = 128, 
             profile_batch          = 0, 
-            write_graph            = True,
-            write_grads            = False, 
-            histogram_freq         = 0,
+            write_graph            = False,
+            write_grads            = True, 
+            histogram_freq         = 128,
         )
         
     callbacks.append(tensorboard_callback)
