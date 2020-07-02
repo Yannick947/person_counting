@@ -1,11 +1,14 @@
 import math
 import statistics
 import os
+import csv
 
+import tensorflow as tf
+from tensorflow.python.ops import math_ops
+from tensorflow.python.keras import backend as K
+from tensorflow.core.util import event_pb2
 import keras
 from keras.models import load_model
-import tensorflow as tf
-from tensorflow.core.util import event_pb2
 import pandas as pd
 import numpy as np 
 
@@ -29,7 +32,6 @@ class Evaluate(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
-        print(logs)
 
         max_metric = get_max_val(self.metric_name, self.mode, self.logdir)
 
@@ -74,32 +76,51 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     '''
 
     #Search for best model in logdir if existing
-    model = parse_model(model, logdir)
-    model.compile(optimizer='adam', loss=create_mae_rescaled(gen.label_scaler.scale_))
+    model = parse_model(model, logdir, scale=gen.label_scaler.scale_)
+    mae_rescaled = create_mae_rescaled(gen.label_scaler.scale_)
+    accuracy_rescaled = create_accuracy_rescaled(gen.label_scaler.scale_)
+    model.compile(optimizer='adam', loss=mae_rescaled, metrics=['msle', 'mae', mae_rescaled, accuracy_rescaled])
     
-    y_pred, y_pred_orig, y_true, y_true_orig, video_cats = get_predictions(model, gen, top_path)
+    y_pred, y_pred_orig, y_true, y_true_orig, video_cats, feature_frames = get_predictions(model, gen, top_path)
+    if mode == 'test': 
+        save_test_evaluation(model, feature_frames, y_true, logdir)
 
     evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
                          logdir=logdir, video_categories=video_cats)
-    
-def parse_model(model, logdir):
+
+def save_test_evaluation(model, feature_frames, y_true, logdir): 
+    """ Save the metrics for the test run as csv file
+    """
+    print('Evaluation for test files: ')
+    metrics = model.evaluate(x=feature_frames, y=np.array(y_true))
+    with open(os.path.join(logdir, 'test_metrics.csv'), 'w') as csv_file:
+        writer = csv.writer(csv_file)
+        metric_keys = ['loss', 'msle', 'mae', 'mae_rescaled', 'accuracy_rescaled']
+        for key, value in zip(metric_keys, metrics):
+            writer.writerow([key, value])
+            print(key, value)
+
+def parse_model(model=None, logdir=None, compile_model=True, scale=0.066):
     ''' Parse logdir for best model
     Arguments: 
         model: Last model during training
         logdir: Path to directory where best model might be stored
+        compile_model: Flag whether model shall be compiled on loading
+        scale: Scale factor that was used for rescaling the data
+
     returns best Keras model during training, if not existent, returns 
             last model during training
     '''
     saved_models = list()
 
-    for files in os.listdir(logdir):
-        for file_name in files: 
-            if file_name[-5:] == '.hdf5':
-                saved_models.append(file_name)
+    for file_name in os.listdir(logdir):
+        if file_name[-5:] == '.hdf5':
+            saved_models.append(file_name)
     
     if len(saved_models) == 0:
+        print("No model to load")
         return model
 
     epoch = 0
@@ -108,13 +129,18 @@ def parse_model(model, logdir):
         cur_epoch = int(file_name[:3].replace('_', '')) 
         if  cur_epoch > epoch:
             epoch = cur_epoch
-            os.remove(os.path.join(logdir, best_model))
+            if best_model is not None:
+                os.remove(os.path.join(logdir, best_model))
             best_model = os.path.join(logdir, file_name)
 
-        elif (i + 1) == len(saved_models):
+        if i + 1 == len(saved_models):
             print('\nLoading from {}, which is the best within this training ..'.format(best_model))
-            return load_model(best_model, custom_objects={'tf': tf}, compile=False) 
-
+            return load_model(best_model, custom_objects={'tf': tf,
+                                                          'hard_tanh':hard_tanh,
+                                                          'acc_rescaled':create_accuracy_rescaled(scale),
+                                                          'mae_rescaled':create_mae_rescaled(scale)},
+                                                          compile=compile_model) 
+    print("No model loaded")
     return model
 
 
@@ -125,7 +151,7 @@ def evaluate_predictions(history,
                          y_true_orig,
                          visualize,
                          model,
-                         mode='Test',
+                         mode='test',
                          logdir=None,
                          video_categories=None):
     '''Evaluate predictions of the best model
@@ -136,7 +162,7 @@ def evaluate_predictions(history,
         y_true: Ground truth 
         y_true_orig: Ground truth retransformed
         visualize: Flag indicating if visualization shall be done
-        mode: Mode ('Train', or 'Test')
+        mode: Mode ('validation', or 'test')
         model: Last model created during training
         logdir: Directory where logging is done
     '''
@@ -177,7 +203,20 @@ def create_mae_rescaled(scale_factor):
         return difference / scale_factor
 
     return mae_rescaled
-    
+
+def create_accuracy_rescaled(scale_factor):
+    '''Create a callback function which calculates accuracy rescaled metric
+    Arguments: 
+        scale_factor: Scaling factor with which the labels were scaled initially
+    '''
+    def acc_rescaled(y_true, y_pred):    
+        """ Calculates the accuracy for the rescaled values
+        """
+        y_true_rescaled = tf.round(tf.math.divide(y_true, scale_factor))
+        y_pred_rescaled =  tf.round(tf.math.divide(y_pred, scale_factor))
+        return math_ops.cast(math_ops.equal(y_true_rescaled, y_pred_rescaled), K.floatx())
+
+    return acc_rescaled
 
 def get_predictions(model, gen, top_path): 
     '''Generate predictions from generator and model
@@ -197,34 +236,43 @@ def get_predictions(model, gen, top_path):
     video_type = list()
 
     df_y = gen.load_label_file()
+    for inverse in [True, False]:
+        for file_name in gen.file_names: 
+            try: 
+                arr_x = np.load(file_name)
+                arr_x = gen.preprocessor.preprocess_features(arr_x, file_name)
+                if inverse: 
+                    if 'back_out' in file_name: 
+                        y = get_label(file_name=file_name, df_y=df_y, inverse=True)
+                    else: 
+                        arr_x = np.flip(arr_x, axis=1)
+                        y = get_label(file_name=file_name, df_y=df_y, inverse=True)
 
-    for file_name in gen.file_names: 
-        try: 
-            x = np.load(file_name)
-            x = gen.preprocessor.preprocess_features(x, file_name)
+                else: 
+                    if 'front_in' in file_name: 
+                        y = get_label(file_name=file_name, df_y=df_y, inverse=False)
+                    else: 
+                        arr_x = np.flip(arr_x, axis=1)
+                        y = get_label(file_name=file_name, df_y=df_y, inverse=False)
+                        
+                y_true_orig.append(int(y.values[0]))
+                y_processed = np.copy(gen.preprocessor.preprocess_labels(y))
 
-            y = get_label(file_name, df_y)
-            y_true_orig.append(int(y.values[0]))
-            y_processed = np.copy(gen.preprocessor.preprocess_labels(y))
+                y_true.append(y_processed[0])
+                feature_frames.append(arr_x)
 
-            y_true.append(y_processed[0])
-            feature_frames.append(x)
+                video_category = get_video_class(file_name, df_y).values[0]
+                video_type.append(CATEGORY_MAPPING[video_category])
 
-            video_category = get_video_class(file_name, df_y).values[0]
-            video_type.append(CATEGORY_MAPPING[video_category])
+            except: 
+                print('Failed reading feature file for ', file_name)
+                continue
 
-        except: 
-            print('Failed reading feature file for ', file_name)
-            continue
-
-    #Reshape features
     feature_frames = np.stack(feature_frames, axis=0)
-    print(model.evaluate(x=feature_frames, y=np.array(y_true)))
     y_pred = model.predict(feature_frames)
-
     y_pred_orig = gen.label_scaler.inverse_transform(y_pred)
     
-    return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig), np.array(video_type)
+    return np.squeeze(y_pred), np.squeeze(y_pred_orig), np.squeeze(np.array(y_true)), np.array(y_true_orig), np.array(video_type), feature_frames
     
 
 def print_stats(predictions, y_true, mode):
@@ -247,3 +295,15 @@ def print_stats(predictions, y_true, mode):
     print('\nMean difference between ground truth and predictions is: ', mean_difference)
     print('Mean difference between dummy estimator (voting always for mean of ground truth) and ground truth: ', mean_difference_dummy)
 
+def hard_tanh(x): 
+    '''Hard tanh function
+    Arguments: 
+        x: Input value
+    
+    hard_tanh(x) = {-1,      for x < -2, 
+                    tanh(x), for x > -2 and x < 2
+                    1,       for x > 2              }
+
+    returns value according to hard tanh function
+    '''
+    return tf.maximum(tf.cast(-1, tf.float32), tf.minimum(tf.cast(1, tf.float32), tf.cast(keras.backend.tanh(x) * 1.05, tf.float32)))
