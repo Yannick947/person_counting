@@ -208,12 +208,12 @@ def set_titles(axs, fig, feature_num, timestep_num):
 
     fig.tight_layout()
 
-def save_confusion_matrix(y_true, y_pred, logdir):
+def save_confusion_matrix(y_true, y_pred, logdir, mode='Train'):
     plt.clf()
-    fig = plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(13,13))
     y_pred = np.rint(y_pred)
     mat = confusion_matrix(y_true, y_pred, labels=np.sort(np.unique(y_true)))
-    sns.heatmap(data=mat, annot=True, linewidths=.8)
+    sns.heatmap(data=mat, annot=True, linewidths=.7)
     plt.xlabel('PredictionsGround truth')
     plt.ylabel('Ground truth')
-    fig.savefig(os.path.join(logdir, 'confusion_matrix.png'), format='png', dpi=fig.dpi)
+    fig.savefig(os.path.join(logdir, f'confusion_matrix{mode}.png'), format='png', dpi=fig.dpi)

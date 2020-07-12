@@ -81,21 +81,22 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
     accuracy_rescaled = create_accuracy_rescaled(gen.label_scaler.scale_)
     model.compile(optimizer='adam', loss=mae_rescaled, metrics=['msle', 'mae', mae_rescaled, accuracy_rescaled])
     
+    model.evaluate(gen)
+
     y_pred, y_pred_orig, y_true, y_true_orig, video_cats, feature_frames = get_predictions(model, gen, top_path)
-    if mode == 'test': 
-        save_test_evaluation(model, feature_frames, y_true, logdir)
+    save_test_evaluation(model, feature_frames, y_true, logdir, mode, gen.batch_size)
 
     evaluate_predictions(history, y_pred, y_pred_orig,
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
                          logdir=logdir, video_categories=video_cats)
 
-def save_test_evaluation(model, feature_frames, y_true, logdir): 
+def save_test_evaluation(model, feature_frames, y_true, logdir, mode, batch_size=None): 
     """ Save the metrics for the test run as csv file
     """
-    print('Evaluation for test files: ')
-    metrics = model.evaluate(x=feature_frames, y=np.array(y_true))
-    with open(os.path.join(logdir, 'test_metrics.csv'), 'w') as csv_file:
+    print(f'Evaluation for {mode} files: ')
+    metrics = model.evaluate(x=feature_frames, y=np.array(y_true), batch_size=batch_size)
+    with open(os.path.join(logdir, f'{mode}_metrics.csv'), 'w') as csv_file:
         writer = csv.writer(csv_file)
         metric_keys = ['loss', 'msle', 'mae', 'mae_rescaled', 'accuracy_rescaled']
         for key, value in zip(metric_keys, metrics):
@@ -172,7 +173,7 @@ def evaluate_predictions(history,
         visualize_predictions(y_true=y_true_orig, y_pred=y_pred_orig, mode=mode, logdir=logdir, video_categories=video_categories)
         visualize_filters(model, logdir=logdir)
         plot_losses(history, logdir=logdir)
-        save_confusion_matrix(y_true_orig, y_pred_orig, logdir)
+        save_confusion_matrix(y_true_orig, y_pred_orig, logdir, mode)
 
 
 def get_stats(y_true, predictions):
@@ -224,6 +225,8 @@ def get_predictions(model, gen, top_path):
     Arguments: 
         model: Model which shall predict
         gen: Generator to load data
+        top_path: Parent directory
+
     returns predictions and corresponding ground_truth
     '''
     gen.reset_label_states()
