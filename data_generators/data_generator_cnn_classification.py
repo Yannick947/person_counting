@@ -11,7 +11,6 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from person_counting.data_generators.data_generators import Generator_CSVS
 from person_counting.data_generators.data_generators import *
 from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.utils.scaler import CSVScaler_CLS
 from person_counting.utils.preprocessing import apply_file_filters
 
 class Generator_CSVS_CNN_CLS(Generator_CSVS):
@@ -59,7 +58,7 @@ class Generator_CSVS_CNN_CLS(Generator_CSVS):
         while True:
             for file_name in self.file_names:
                 try: 
-                    df_x, label = self.__getitem__(file_name)
+                    df_x, label = self.get_sample(file_name)
 
                 #Error messages for debugging purposes
                 except FileNotFoundError as e: 

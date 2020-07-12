@@ -35,7 +35,7 @@ class Generator_CSVS(keras.utils.Sequence):
                  augmentation_factor=0, 
                  inverse_probability=0.5): 
 
-        ''' Initialize Generator object.
+        """ Initialize Generator object.
 
             Arguments
                 length_t            : Length of the feature's DataFrame in time dimension
@@ -47,7 +47,7 @@ class Generator_CSVS(keras.utils.Sequence):
                 label_file          : Name of the label file
                 augmentation_factor : Factor how much augmentation shall be done, 1 means moving every
                                       pixel for 1 position 
-        '''
+        """
         self.top_path               = top_path
         self.label_file             = label_file
         self.length_t               = length_t
@@ -65,7 +65,12 @@ class Generator_CSVS(keras.utils.Sequence):
         self.unfiltered_length_t, self.unfiltered_length_y = pp.get_lengths(self.top_path)
         self.preprocessor           = pp.Preprocessor(length_t, length_y, top_path, sample, feature_scaler, label_scaler, augmentation_factor)
         self.df_y                   = self.load_label_file()
-        self.inverse_probability    = inverse_probability
+        self.index_to_file_name     = self.load_index_to_filename()
+        self.shuffle                = True
+
+        self.eval_batches = int(np.floor(len(self.file_names) / float(self.batch_size)))
+        print('Generator contains ', len(self.file_names), ' files with ', self.eval_batches, ' batches of size ', self.batch_size)
+        self.on_epoch_end()
 
     @abc.abstractmethod
     def datagen(self):
@@ -74,13 +79,65 @@ class Generator_CSVS(keras.utils.Sequence):
         raise NotImplementedError
     
     def __len__(self):
-        '''Returns the amount of batches for the generator
+        '''Returns the amount of batches for the generator to be used when flipping the files is applied (*2)
         '''
-        eval_batches = int(np.floor(len(self.file_names) / float(self.batch_size)))
-        print('Generator contains ', len(self.file_names), ' files with ', eval_batches, ' batches of size ', self.batch_size)
-        return eval_batches
+        return self.eval_batches * 2
     
-    def __getitem__(self, file_name):
+    def __getitem__(self, index):
+        """ Gets an item by its index
+        """
+        x_batch = np.zeros(shape=(self.batch_size,
+                                self.length_t,
+                                self.length_y, 
+                                2))
+                                
+        y_batch = np.zeros(shape=(self.batch_size, 1))
+        batch_index = 0 
+        
+        for i in range(index*self.batch_size, (index + 1) * self.batch_size):
+            try: 
+                if (i >= len(self.index_to_file_name)):
+                    #This is the inverse case when array shall be flipped
+                    i = i - len(self.index_to_file_name)
+                    i = self.indexes[i]
+                    arr_x, label = self.get_sample(self.index_to_file_name[i], flip_arr=True)
+                else: 
+                    i = self.indexes[i]
+                    arr_x, label = self.get_sample(self.index_to_file_name[i], flip_arr=False)
+
+            #Error messages for debugging purposes
+            except FileNotFoundError as e: 
+                print(e)
+                continue
+
+            except ValueError as e: 
+                print(e)
+                print(self.index_to_file_name[i])
+                # os.remove(self.index_to_file_name[i])
+                continue
+
+            x_batch[batch_index,:,:,:] = arr_x
+            y_batch[batch_index] = label
+            batch_index += 1
+
+        return (x_batch, y_batch)
+
+    def on_epoch_end(self):
+        'Updates indexes after each epoch'
+        self.indexes = np.arange(len(self.index_to_file_name))
+        if self.shuffle == True:
+            np.random.shuffle(self.indexes)
+
+    def load_index_to_filename(self):
+        """ Get a dict mapping indices to file names
+        """
+        index_to_file_name = dict()
+        for index, file_name in enumerate(self.file_names):
+            index_to_file_name[index] = file_name
+
+        return index_to_file_name
+
+    def get_sample(self, file_name, flip_arr=False):
         '''Gets pair of features and labels for given filename
         Arguments: 
             file_name: The name of the file which shall be parsed
@@ -97,10 +154,9 @@ class Generator_CSVS(keras.utils.Sequence):
                 raise FileNotFoundError('Failed getting features for file {}'.format(file_name))
                 
         arr_x = self.preprocessor.preprocess_features(arr_x, file_name)
-
         #inverse case is getting the label entering for back out with flipped input and exiting for front in 
         #labels have to be inverted according to both parameters (4 cases)
-        if random.uniform(0.0, 1.0) < self.inverse_probability: 
+        if not flip_arr: 
             if 'back_out' in file_name: 
                 label = get_label(file_name=file_name, df_y=self.df_y, inverse=True)
             else: 
@@ -219,12 +275,10 @@ def split_files(top_path, label_file):
     df_names = df_names.apply(lambda row: row[:-4] + '.npy')
     train, test = train_test_split(df_names,
                                    train_size= 1-TEST_SIZE - VAL_SIZE,
-                                   test_size=TEST_SIZE + VAL_SIZE,
                                    random_state=42)
     
     validation, test = train_test_split(test,
                                         train_size=VAL_SIZE / (VAL_SIZE + TEST_SIZE),
-                                        test_size=TEST_SIZE / (VAL_SIZE + TEST_SIZE), 
                                         random_state=42)
     return train, validation, test
 
@@ -256,7 +310,7 @@ def get_exiting(file_name, df_y):
         file_name: Name of given training sample
         df_y: Dataframe with all labels for all samples
 
-        returns: DF wit h exiting persons for given file
+        returns: DF with exiting persons for given file
     '''
     search_str = file_name.replace('\\', '/').replace('\\', '/')
     

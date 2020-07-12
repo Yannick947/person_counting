@@ -34,44 +34,6 @@ class Generator_CSVS_CNN(Generator_CSVS):
     def __init__(self, *args, **kwargs):
         super(Generator_CSVS_CNN, self).__init__(*args, **kwargs)
 
-    def datagen(self):
-
-        '''
-        Datagenerator for bus video csv
-
-        yields: Batch of samples in cnn shape
-        '''
-
-        batch_index = 0
-
-        x_batch = np.zeros(shape=(self.batch_size,
-                                self.length_t,
-                                self.length_y, 
-                                2))
-                                
-        y_batch = np.zeros(shape=(self.batch_size, 1))
-
-        while True:
-            for file_name in self.file_names:
-                try: 
-                    arr_x, label = self.__getitem__(file_name)
-
-                #Error messages for debugging purposes
-                except FileNotFoundError as e: 
-                    continue
-
-                except ValueError as e: 
-                    continue
-
-                x_batch[batch_index,:,:,:] = arr_x
-                y_batch[batch_index] = label
-                batch_index += 1
-
-                # Shape for x must be 4D [samples, timesteps, features, channels] and numpy array
-                if batch_index == self.batch_size:
-                    batch_index = 0
-                    yield (x_batch, y_batch)
-
 
 def create_datagen(top_path, 
                    sample, 
@@ -117,7 +79,8 @@ def create_datagen(top_path,
                                    top_path=top_path,
                                    label_file=label_file, 
                                    augmentation_factor=augmentation_factor)
-    
+
+    #Don't do augmentation here!
     gen_validation = Generator_CSVS_CNN(length_t=length_t,
                                   length_y=length_y,
                                   file_names=validation_file_names,
@@ -127,7 +90,7 @@ def create_datagen(top_path,
                                   top_path=top_path,
                                   label_file=label_file, 
                                   augmentation_factor=0)
-    #Don't do augmentation here!
+
     gen_test = Generator_CSVS_CNN(length_t=length_t,
                                   length_y=length_y,
                                   file_names=test_file_names,

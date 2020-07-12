@@ -48,7 +48,7 @@ def main(args=None):
                               datagen_train=datagen_train,
                               logdir=logdir,
                               hparams=sample,
-                              datagen_test=datagen_validation,
+                              datagen_validation=datagen_validation,
                               epochs=args.epochs)
 
         evaluate_run(model, history, datagen_validation,  mode='validation', logdir=logdir, visualize=True, top_path=args.top_path)
@@ -68,21 +68,21 @@ def get_samples(args):
     param_grid = {
                   'pooling_type'        : ['avg', 'max'],
                   'kernel_size'         : [i for i in range(3, 7)],
-                  'kernel_number'       : [i for i in range(2, 6)],
+                  'kernel_number'       : [i for i in range(5, 12)],
                   'pool_size_y'         : [2],
                   'pool_size_x'         : [2, 3],
-                  'learning_rate'       : loguniform.rvs(a=1e-4, b=1e-2, size=100000),
-                  'optimizer'           : ['Adam'], 
+                  'learning_rate'       : loguniform.rvs(a=1e-4, b=0.1, size=100000),
+                  'optimizer'           : ['Adam', 'Nadam', 'Adagrad'], 
                   'layer_number'        : [2, 3, 4], 
                   'batch_normalization' : [False, True],
-                  'regularization'      : [0, 0.01, 0.05], 
+                  'regularization'      : [0, 0.01, 0.1], 
                   'filter_rows_lower'   : [0], 
                   'filter_cols_upper'   : [0], 
                   'filter_cols_lower'   : [0],
-                  'batch_size'          : [16, 32, 64], 
+                  'batch_size'          : [16, 32], 
                   'loss'                : ['mae', 'mae', 'mse'], 
                   'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
-                  'units'               : [i for i in range(4,15)],          
+                  'units'               : [i for i in range(4,20)],          
                   'squeeze_method'      : ['1x1_conv', 'squeeze']
                 }
 
@@ -98,7 +98,7 @@ def train(model,
           datagen_train,
           logdir=None,
           hparams=None,
-          datagen_test=None,
+          datagen_validation=None,
           workers=32,
           use_multiprocessing=True, 
           epochs=70, 
@@ -110,7 +110,7 @@ def train(model,
         datagen_train: Datagenerator for training
         logdir: Path to folder for logging
         hparams: Sample of hyperparameter
-        datagen_test: Datagenerator for evaluation during testing
+        datagen_validation: Datagenerator for evaluation during testing
         workers: Number of workers if multiprocessing is true
         use_multiprocessing: Flag if multiprocessing is enabled
         epochs: Number of epochs to train
@@ -121,17 +121,17 @@ def train(model,
     max_metrics = {'epoch_mae_rescaled': 'min',
                    'epoch_acc_rescaled' : 'max'}
 
-    history = model.fit_generator(validation_steps=int(len(datagen_test)),
-                                  generator=datagen_train.datagen(),
-                                  validation_data=datagen_test.datagen(),
+    history = model.fit_generator(validation_steps=int(len(datagen_validation)),
+                                  generator=datagen_train,
+                                  validation_data=datagen_validation,
                                   steps_per_epoch=int(len(datagen_train)),
                                   epochs=epochs,
-                                  verbose=1,
+                                  verbose=0,
                                   shuffle=True,
                                   callbacks=create_callbacks(logdir, hparams, save_best=True, max_metrics=max_metrics), 
                                   use_multiprocessing=use_multiprocessing, 
                                   workers=workers, 
-                                  max_queue_size=workers*2)
+                                  max_queue_size=workers*2 + 1)
     return history, model
 
 

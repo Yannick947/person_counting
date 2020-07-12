@@ -28,9 +28,9 @@ LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
 def main():
     if sys.argv[1] == 'train_best_cpu': 
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
-        workers = 1
+        workers = 0
         multi_processing = False
-        train_best(workers, multi_processing, top_path, epochs=0)
+        train_best(workers, multi_processing, top_path, epochs=1)
 
     elif sys.argv[1] == 'train_best_gpu':
         top_path = '/content/drive/My Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
@@ -184,9 +184,9 @@ def train_best(workers, multi_processing, top_path, epochs=25):
     datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                                              sample=hparams,
                                                                              label_file=label_file,
-                                                                             filter_hour_above=9)
+                                                                             filter_hour_above=25)
     cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_,
-                               snap_path='C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/full_data/t1_2020-06-30-11-41-16_cnn_2020_Jun_30_14_07_46')
+                               snap_path='C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/full_data_second/t1_2020-07-03-15-00-21_cnn_2020_Jul_03_16_39_28')
 
     history, cnn_model = cnn.train(cnn_model,
                                    datagen_train,
@@ -261,6 +261,8 @@ def get_best_hparams(top_path):
                 'loss'                   : 'msle',
                 'Recurrent_Celltype'     : 'LSTM',
                 'squeeze_method'         : '1x1_conv',
+                'schedule_step'          : 5,
+                'warm_start_path'        : 'None',
               }
               
     timestep_num, feature_num = get_filtered_lengths(top_path=top_path, sample=hparams)

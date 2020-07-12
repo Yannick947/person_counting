@@ -45,7 +45,7 @@ class Generator_CSVS_LSTM(Generator_CSVS):
 
             for file_name in self.file_names: 
                 try: 
-                    df_x, label = self.__getitem__(file_name)
+                    df_x, label = self.get_sample(file_name)
 
                 except FileNotFoundError as e: 
                     continue
