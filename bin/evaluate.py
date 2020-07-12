@@ -2,6 +2,7 @@ import math
 import statistics
 import os
 import csv
+import operator
 
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
@@ -90,6 +91,19 @@ def evaluate_run(model, history, gen, mode, logdir, top_path, visualize=True):
                          y_true, y_true_orig, model=model,
                          visualize=visualize, mode=mode, 
                          logdir=logdir, video_categories=video_cats)
+    
+    get_highest_errors(y_pred_orig, y_true_orig, gen.file_names)
+    
+def get_highest_errors(y_pred_orig, y_true_orig, file_names, num_files=10):
+    distances = dict()
+    for y_pred, y_true , file_name in zip(y_pred_orig, y_true_orig, file_names + file_names):
+        distances[file_name] = abs(y_pred - y_true)
+    for _ in range(num_files):
+        max_file = max(distances.items(), key=operator.itemgetter(1))[0]
+        print('File with maximum distance to ground truth: ', max_file, '\ndistance: ', distances[max_file])
+        del distances[max_file]
+
+
 
 def save_test_evaluation(model, feature_frames, y_true, logdir, mode, batch_size=None): 
     """ Save the metrics for the test run as csv file
