@@ -19,6 +19,7 @@ def parse_args(args):
     parser.add_argument('--filter-hour-above',      help='Filter videos which are after this hour during the day due to darkness', type=int, default=0)
     parser.add_argument('--epochs',                 help='Number of epochs to train', type=int, default=50)
     parser.add_argument('--warm-start-path',        help='Starting from the best current available snapshot in the provided folder', default='None')
+    parser.add_argument('--schedule-step',          help='The epoch when the learning rate shall be scheduled', type=int, default=0)
     return parser.parse_args(args)
 
 def check_args(args): 

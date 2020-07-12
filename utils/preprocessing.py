@@ -67,7 +67,7 @@ class Preprocessor(object):
         return label
 
 
-def clean_ends(arr, del_leading=5, del_trailing=5, del_rows=0):
+def clean_ends(arr, del_leading=0, del_trailing=0, del_rows=0):
     ''' Delete leading and trailing columns due to sparsity. 
 
     Arguments: 

@@ -59,6 +59,7 @@ def get_static_hparams(args):
     '''
     logging_ret = dict()
     LOGGING_ARGS = [
+                    'schedule_step',
                     'batch_size',
                     'filter_hour_above',
                     'filter_category_noisy',
@@ -70,7 +71,7 @@ def get_static_hparams(args):
 
     logging_ret['date'] = int(datetime.now().strftime("%m%d%H"))
 
-    if args.warm_start_path is not None: 
+    if (args.warm_start_path is not None) and (args.warm_start_path is not 'None'): 
         logging_ret['warm_start'] = True
     else: 
         logging_ret['warm_start'] = False
@@ -78,7 +79,7 @@ def get_static_hparams(args):
     return logging_ret
 
 
-def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=False, max_metrics=None): 
+def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=False, max_metrics=None, schedule_step=0): 
     '''Creates keras callbacks for training
 
     Arguments: 
@@ -108,9 +109,9 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
     if save_best: 
         save_path = os.path.join(logdir, '{epoch:02d}_{val_loss:.2f}.hdf5')
         callbacks.append(keras.callbacks.ModelCheckpoint(save_path,
-                                                          monitor='val_loss',
+                                                          monitor='val_acc_rescaled',
                                                           save_best_only=True, 
-                                                          mode='min', 
+                                                          mode='max', 
                                                           verbose=1))
 
     if reduce_on_plateau: 
@@ -124,9 +125,25 @@ def create_callbacks(logdir, hparams=None, save_best=True, reduce_on_plateau=Fal
             cooldown   = 0,
             min_lr     = 1e-8
         ))
+    
+    if hparams['schedule_step'] > 0:
+
+        def lr_scheduler(epoch, lr):
+            """ Schedule the learning rate
+            """
+            decay_rate = 0.5
+
+            if epoch % hparams['schedule_step'] == 0 and epoch:
+                return lr * decay_rate
+            else: 
+                return lr
+
+        callbacks.append(keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=1))
 
     for name, mode in max_metrics.items(): 
         callbacks.append(Evaluate(name, mode, logdir))
+
+    callbacks.append(keras.callbacks.EarlyStopping(monitor='val_acc_rescaled', min_delta=0.1, patience=20, verbose=0, mode='max'))
 
     return callbacks
 
