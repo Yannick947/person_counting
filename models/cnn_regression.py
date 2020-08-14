@@ -1,6 +1,7 @@
 import sys
 import os
 from time import gmtime, strftime
+import json
 
 import tensorflow as tf
 import keras
@@ -9,6 +10,7 @@ import numpy as np
 from keras import Model
 from keras.layers import (Dense, MaxPooling2D, Conv2D, Flatten, BatchNormalization,
                           AveragePooling2D, Reshape, LSTM, Layer, Lambda, Input, GRU)
+from keras import backend as K
 from sklearn.model_selection import ParameterSampler
 from scipy.stats import loguniform
 
@@ -30,30 +32,41 @@ def main(args=None):
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
-        timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
+        try: 
+            timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
 
-        datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(args.top_path,
-                                                                                 sample,
-                                                                                 args.label_file, 
-                                                                                 args.augmentation_factor, 
-                                                                                 args.filter_hour_above, 
-                                                                                 args.filter_category_noisy)
+            datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(args.top_path,
+                                                                                    sample,
+                                                                                    args.label_file, 
+                                                                                    args.augmentation_factor, 
+                                                                                    args.filter_hour_above, 
+                                                                                    args.filter_category_noisy)
 
-        rescale_factor = datagen_train.label_scaler.scale_
-        print('Using rescale factor ', rescale_factor)
+            rescale_factor = datagen_train.label_scaler.scale_
+            print('Using rescale factor ', rescale_factor)
 
-        logdir = os.path.join(args.topdir_log + '_cnn_' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
-        model = create_cnn(timestep_num, feature_num, sample, rescale_factor, snap_path=args.warm_start_path)
-        history, model= train(model=model,
-                              datagen_train=datagen_train,
-                              logdir=logdir,
-                              hparams=sample,
-                              datagen_validation=datagen_validation,
-                              epochs=args.epochs)
+            logdir = os.path.join(args.topdir_log + '_cnn_' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
 
-        evaluate_run(model, history, datagen_validation,  mode='validation', logdir=logdir, visualize=True, top_path=args.top_path)
-        evaluate_run(model, history, datagen_test, mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
+            model = create_cnn(timestep_num, feature_num, sample, rescale_factor, snap_path=args.warm_start_path)
+            log_load_params(logdir, sample, args.warm_start_path)
 
+            history, model= train(model=model,
+                                  datagen_train=datagen_train,
+                                  logdir=logdir,
+                                  hparams=sample,
+                                  datagen_validation=datagen_validation,
+                                  epochs=args.epochs)
+
+            evaluate_run(model, history, datagen_validation,  mode='validation', logdir=logdir, visualize=True, top_path=args.top_path)
+            evaluate_run(model, history, datagen_test, mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
+            
+            K.clear_session()
+            del model
+
+        except OSError as ose:
+            print(ose)
+            print('OSError ocurred, continue with next set of parameters')
+            continue
 
 def get_samples(args):
     '''Get different samples of hyperparameters
@@ -71,19 +84,20 @@ def get_samples(args):
                   'kernel_number'       : [i for i in range(5, 12)],
                   'pool_size_y'         : [2],
                   'pool_size_x'         : [2, 3],
-                  'learning_rate'       : loguniform.rvs(a=1e-4, b=0.1, size=100000),
-                  'optimizer'           : ['Adam', 'Nadam', 'Adagrad'], 
-                  'layer_number'        : [2, 3, 4], 
+                  'learning_rate'       : loguniform.rvs(a=5e-4, b=3e-3, size=100000),
+                  'optimizer'           : ['Adam', 'Nadam', 'AdaGrad'], 
+                  'layer_number'        : [3, 4, 5], 
                   'batch_normalization' : [False, True],
-                  'regularization'      : [0, 0.01, 0.1], 
+                  'regularization'      : [0, 0.05, 0, 0.01, 0.1], 
                   'filter_rows_lower'   : [0], 
                   'filter_cols_upper'   : [0], 
                   'filter_cols_lower'   : [0],
                   'batch_size'          : [16, 32], 
-                  'loss'                : ['mae', 'mae', 'mse'], 
+                  'loss'                : ['mae', 'mae', 'mae', 'mse'], 
                   'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
                   'units'               : [i for i in range(4,20)],          
-                  'squeeze_method'      : ['1x1_conv', 'squeeze']
+                  'squeeze_method'      : ['1x1_conv', 'squeeze'], 
+                  '1x1_conv_filters'    : [i + 1 for i in range(20)],
                 }
 
     randint = int(tf.random.uniform(shape=[], minval=0, maxval=10, dtype=tf.dtypes.int32, seed=None))
@@ -145,14 +159,14 @@ def create_cnn(timesteps, features, hparams, rescale_factor, snap_path=None):
 
         returns keras model with cnn architecture
     '''
-    
+    model = None
+
+    if (snap_path is not 'None') and (snap_path is not None): 
+        model = parse_model(logdir=snap_path, compile_model=False)
+
     print('Actual model is using following hyper-parameters:')
     for key in hparams.keys():
         print(key, ': ', hparams[key])
-
-    model = None
-    if (snap_path is not 'None') and (snap_path is not None): 
-        model = parse_model(logdir=snap_path, compile_model=False)
 
     if model is None: 
         #define layer creations
@@ -192,7 +206,6 @@ def create_cnn(timesteps, features, hparams, rescale_factor, snap_path=None):
         for layer_num in range(hparams['layer_number']):
             try:
                 layers.append(create_conv_layer(layer=layer_num)(layers[-1]))
-                layers.append(create_conv_layer(layer=layer_num)(layers[-1]))
                 layers.append(create_pool_layer()(layers[-1]))
 
             except ValueError:
@@ -202,14 +215,10 @@ def create_cnn(timesteps, features, hparams, rescale_factor, snap_path=None):
                     'because it would lead to negative dimensions. Creation was skipped')
         
         #Use 1x1 Convolution to remove depth of model
-        if hparams['squeeze_method'] == '1x1_conv':
-            layers.append(Conv2D(1, 1, use_bias=True, activation='relu', padding='same')(layers[-1]))
-            newdim = tuple([x for x in layers[-1].shape.as_list() if x != 1 and x is not None])
-            layers.append(Reshape(newdim)(layers[-1]))
-
-        else:
-            #Squeeze 4th dimension and pass to time-series without loosing information
-            layers.append(Lambda(squeeze_dim3, output_shape = squeeze_dim3_shape)(layers[-1]))
+        layers.append(Conv2D(hparams['1x1_conv_filters'], 1, use_bias=True, activation='relu', padding='same')(layers[-1]))
+        
+        #Squeeze 4th dimension and pass to time-series without loosing information
+        layers.append(Lambda(squeeze_dim3, output_shape = squeeze_dim3_shape)(layers[-1]))
 
         layers.append(create_rnn_layer(return_sequences=True)(layers[-1]))
         layers.append(create_rnn_layer(return_sequences=False)(layers[-1]))
@@ -227,14 +236,32 @@ def create_cnn(timesteps, features, hparams, rescale_factor, snap_path=None):
 
     return model
 
+def log_load_params(logdir, hparams, snap_path):
+    """ Load and log model architecture for later loading of architecture"""
+    if not os.path.exists(logdir): 
+        os.mkdir(logdir)
+        
+    if (snap_path is not 'None') and (snap_path is not None): 
+        update_keys = ['pool_size_y', 'pool_size_x', 'layer_number', 'pooling_type', 'kernel_size','squeeze_method',
+                       'units', 'kernel_number',  'Recurrent_Celltype', 'batch_normalization', 'regularization', ]
+
+        with open(os.path.join(snap_path, 'config.json'), 'r') as fp:
+            config = json.load(fp)
+
+        for key in update_keys: 
+            hparams.update({key:config[key]}) 
+
+    with open(os.path.join(logdir, 'config.json'), 'w') as fp:
+        json.dump(hparams, fp) 
 
 def squeeze_dim3(x3d):
+    """ Squeeze 3rd dimension in CNN architecture """
     shape = tf.shape( x3d ) # get dynamic tensor shape
     x3d = tf.reshape( x3d, [shape[0], shape[1], shape[2] * shape[3]])
     return x3d
 
-
 def squeeze_dim3_shape(x3d_shape):
+    """ Squeeze shape of 3rd dimension in CNN architecture """
     in_batch, in_rows, in_cols, in_filters = x3d_shape
     if ( None in [ in_rows, in_cols] ) :
         output_shape = (in_batch, None, in_filters)
