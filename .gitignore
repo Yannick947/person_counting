@@ -16,7 +16,9 @@ events.*
 *.bat
 *.hdf5
 *.h5
-
+*.gz
+*.pb
+*.json
 /.pytest_cache
 /.cache
 /.WiderPerson
