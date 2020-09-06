@@ -15,6 +15,7 @@ events.*
 *.pyc
 *.bat
 *.hdf5
+*.pgf
 *.h5
 *.gz
 *.pb
