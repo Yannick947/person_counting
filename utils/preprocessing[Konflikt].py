@@ -131,6 +131,7 @@ def apply_file_filters(df, filter_hour_above=24, filter_category_noisy=False, fi
         df = df[~df.str.contains("noisy")]
 
     df = df[df.apply(__filter_by_hour, args=(filter_hour_above, filter_hour_below,))]
+    
     return df
 
 def __filter_by_hour(row, filter_hour_above=0, filter_hour_below=7): 
