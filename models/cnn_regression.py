@@ -29,24 +29,28 @@ def main(args=None):
     args = parse_args(args)
     check_args(args)
     
+    # Generate randomly samples of hyperparameter (random search)
     hparams_samples = get_samples(args)
 
     for sample in hparams_samples: 
         try: 
             timestep_num, feature_num = get_filtered_lengths(args.top_path, sample)
 
-            datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(args.top_path,
-                                                                                    sample,
-                                                                                    args.label_file, 
-                                                                                    args.augmentation_factor, 
-                                                                                    args.filter_hour_above, 
-                                                                                    args.filter_category_noisy)
+            #Create datagenerators
+            datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=args.top_path,
+                                                                                    sample=sample,
+                                                                                    label_file=args.label_file, 
+                                                                                    augmentation_factor=args.augmentation_factor, 
+                                                                                    filter_hour_above=args.filter_hour_above, 
+                                                                                    filter_category_noisy=args.filter_category_noisy,
+                                                                                    supercharge_crowdeds=args.supercharge_crowdeds)
 
             rescale_factor = datagen_train.label_scaler.scale_
             print('Using rescale factor ', rescale_factor)
 
             logdir = os.path.join(args.topdir_log + '_cnn_' + strftime("%Y_%b_%d_%H_%M_%S", gmtime()))
 
+            #Create model depending on hyperparameter sample
             model = create_cnn(timestep_num, feature_num, sample, rescale_factor, snap_path=args.warm_start_path)
             log_load_params(logdir, sample, args.warm_start_path)
 
@@ -57,19 +61,22 @@ def main(args=None):
                                   datagen_validation=datagen_validation,
                                   epochs=args.epochs)
 
+            #Evaluate runs for test and validation
             evaluate_run(model, history, datagen_validation,  mode='validation', logdir=logdir, visualize=True, top_path=args.top_path)
             evaluate_run(model, history, datagen_test, mode='test', logdir=logdir, visualize=True, top_path=args.top_path)
             
+            # Delete model to free memory from graph
             K.clear_session()
             del model
 
+        # In the GoogleColab environment OSErrors can happen, comment out if using in an other VM 
         except OSError as ose:
             print(ose)
             print('OSError ocurred, continue with next set of parameters')
             continue
 
 def get_samples(args):
-    '''Get different samples of hyperparameters
+    '''Get random samples of hyperparameters
 
     Arguments: 
         args: Arguments read from command line 
@@ -79,25 +86,25 @@ def get_samples(args):
 
     #Put values multiple times into list to increase probability to be chosen
     param_grid = {
-                  'pooling_type'        : ['avg', 'max'],
-                  'kernel_size'         : [i for i in range(3, 7)],
-                  'kernel_number'       : [i for i in range(5, 12)],
+                  'pooling_type'        : ['avg'],
+                  'kernel_size'         : [i for i in range(5,6)],
+                  'kernel_number'       : [i for i in range(11, 15)],
                   'pool_size_y'         : [2],
-                  'pool_size_x'         : [2, 3],
-                  'learning_rate'       : loguniform.rvs(a=5e-4, b=3e-3, size=100000),
-                  'optimizer'           : ['Adam', 'Nadam', 'AdaGrad'], 
-                  'layer_number'        : [3, 4, 5], 
+                  'pool_size_x'         : [2],
+                  'learning_rate'       : loguniform.rvs(a=1e-5, b=8e-3, size=1000),
+                  'optimizer'           : ['Adam', 'Nadam'], 
+                  'layer_number'        : [5], 
                   'batch_normalization' : [False, True],
-                  'regularization'      : [0, 0.05, 0, 0.01, 0.1], 
+                  'regularization'      : [0, 0.05, 0.1], 
                   'filter_rows_lower'   : [0], 
                   'filter_cols_upper'   : [0], 
                   'filter_cols_lower'   : [0],
-                  'batch_size'          : [16, 32], 
-                  'loss'                : ['mae', 'mae', 'mae', 'mse'], 
-                  'Recurrent_Celltype'  : ['GRU', 'LSTM'], 
-                  'units'               : [i for i in range(4,20)],          
+                  'batch_size'          : [16, 32, 64], 
+                  'loss'                : ['mae'], 
+                  'Recurrent_Celltype'  : ['GRU'], 
+                  'units'               : [i for i in range(11,14)],          
                   'squeeze_method'      : ['1x1_conv', 'squeeze'], 
-                  '1x1_conv_filters'    : [i + 1 for i in range(20)],
+                  '1x1_conv_filters'    : [i + 1 for i in range(5,11)],
                 }
 
     randint = int(tf.random.uniform(shape=[], minval=0, maxval=10, dtype=tf.dtypes.int32, seed=None))

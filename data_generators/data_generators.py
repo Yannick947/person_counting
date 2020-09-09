@@ -267,10 +267,10 @@ def get_feature_file_names(top_path):
 def split_files(top_path, label_file):
     ''' Splits all files in the training set into train and test files
     and returns lists of names for train and test files
-    # TODO: Split files according to the categories equally distributed (stratified)
     '''
 
     df_names = pd.Series(get_feature_file_names(top_path))
+
     #replace .avi with .npy
     df_names = df_names.apply(lambda row: row[:-4] + '.npy')
     train, test = train_test_split(df_names,
