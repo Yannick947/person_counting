@@ -21,6 +21,7 @@ from person_counting.bin.evaluate import evaluate_run
 from person_counting.bin.evaluate_cls import evaluate_run_cls
 from person_counting.utils.preprocessing import get_filtered_lengths, get_video_daytime
 from person_counting.utils.visualization_utils import visualize_input_2d, visualize_input_3d
+from person_counting.data_generators.trajectory_augmentation import augment_trajectory
 
 label_file = 'pcds_dataset_labels_united.csv'
 LABEL_HEADER = ['file_name', 'entering', 'exiting', 'video_type']
@@ -50,28 +51,32 @@ def main():
     
     elif sys.argv[1] == 'show_feature_frames':
         top_path = 'C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/'
-        show_feature_frames(top_path)
+        show_feature_frames(top_path, show_augmentation=True)
 
 
-def show_feature_frames(top_path):
+def show_feature_frames(top_path, show_augmentation=False):
     #Put the params you want to visualize below in the get_best_params function
     hparams, timestep_num, feature_num = get_best_hparams(top_path)
     datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                                             sample=hparams,
                                                                             label_file=label_file, 
                                                                             augmentation_factor=0.0, 
-                                                                            filter_hour_above=8, 
+                                                                            filter_hour_below=16,
+                                                                            filter_hour_above=20, 
                                                                             filter_category_noisy=True)
 
     pool_model = create_pooling_model(hparams, timestep_num, feature_num)
     for datagen in [datagen_test, datagen_train]:                                                   
-        gen = datagen.datagen()
         sns.set()
 
-        for _ in range(8):
+        for i in range(len(datagen)):
             with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
                 datagen.reset_file_names_processed() 
-                feature_frame, label = next(gen)
+                feature_frame, label = datagen[i]
+
+                if datagen.label_scaler.inverse_transform(label)[0] < 4:
+                    continue
+
                 file_names = datagen.get_file_names_processed()
                 daytime = get_video_daytime(file_names[0])
 
@@ -80,7 +85,14 @@ def show_feature_frames(top_path):
                 print('Daytime of video: ', daytime[0], ':', daytime[1], '\n')
                
                 # visualize_input_3d(feature_frame, pool_model, save_plots=False)
-                visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=False)
+                visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=True)
+
+                if show_augmentation:
+                    for augmentation_factor in [0.1, 0.5, 1.0]:
+                        feature_frame = augment_trajectory(feature_frame[0,:,:,:], aug_factor=augmentation_factor)
+                        feature_frame = np.expand_dims(feature_frame, axis=0)
+                        visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=True)
+
 
 def create_pooling_model(hparams, timesteps, features): 
     input_layer = Input(shape=((timesteps, features, 2)))
@@ -184,7 +196,7 @@ def train_best(workers, multi_processing, top_path, epochs=25):
     datagen_train, datagen_validation, datagen_test = dgv_cnn.create_datagen(top_path=top_path, 
                                                                              sample=hparams,
                                                                              label_file=label_file,
-                                                                             filter_hour_above=25)
+                                                                             filter_hour_above=20)
     cnn_model = cnn.create_cnn(timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_,
                                snap_path='C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/full_data_second/t1_2020-07-03-15-00-21_cnn_2020_Jul_03_16_39_28')
 
