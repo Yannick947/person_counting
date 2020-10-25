@@ -6,10 +6,13 @@ import numpy as np
 import pandas as pd
 
 plt.style.use('ggplot')
-save_path = 'C:/Users/Yannick/OneDrive/Dokumente/Studium/Masterarbeit/Ausarbeitung/98_images/3d_params.pgf'
+save_path = 'C:/Users/Yannick/OneDrive/Dokumente/Studium/Masterarbeit/Ausarbeitung/98_images/3d_params_new.pgf'
+input_file_path = 'C:/Users/Yannick/OneDrive/Dokumente/Studium/Masterarbeit/Ausarbeitung/98_images/source/hparams_table_counting_full_cold_new.csv'
 
 def main():
-    df = pd.read_csv('C:/Users/Yannick/OneDrive/Dokumente/Studium/Masterarbeit/Ausarbeitung/98_images/source/hparams_table_counting_full_cold.csv')
+    df = pd.read_csv(input_file_path)
+    print(df.head())
+
     print(df.loc[df['number_params']==df['number_params'].max()])
     df.drop(axis=1, index=52, inplace=True)
     x = df['units'].values
