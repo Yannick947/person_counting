@@ -85,7 +85,7 @@ def plot_losses(history, logdir=None):
         print('Figure saved as losses.png')
 
 
-def visualize_filters(model, logdir=None):
+def visualize_filters(model, logdir=None, attetion_map=False):
     if logdir is not None:
         print('\nSaving convolutional filters for vizualization ..')
         matplotlib.rcParams.update(matplotlib.rcParamsDefault)
@@ -98,22 +98,24 @@ def visualize_filters(model, logdir=None):
             print('layer_name: ', layer.name,', shape: ', filters.shape)
             f_min, f_max = filters.min(), filters.max()
             filters = (filters - f_min) / (f_max - f_min)
-            figure = plt.figure()
 
-            for i in range(int(filters.shape[3])):
-                f = filters[:, :, :, i]
-                ax = plt.subplot(1, int(filters.shape[3]), i + 1)
-                plt.imshow(f[:, :, 0], cmap='gray')
-                figure.add_axes(ax)
+            fig, ax = plt.subplots(nrows=int(filters.shape[2]), ncols=int(filters.shape[3]))
 
-            plt.subplots_adjust(hspace=0.9)
-            save_name = os.path.join(logdir, 'filters_layer{}.png'.format(il))
-            figure.savefig(save_name, dpi=1200)
+            for i, row in enumerate(ax):
+                for ii, col in enumerate(row):
+                    f = filters[:, :, i, ii]
+                    col.imshow(f[:, :], cmap='gray')
+
+            # plt.subplots_adjust(hspace=1.5, vspace=1.5)
             plt.show()
+
+            save_name = os.path.join(logdir, f'filters_layer{il}.png')
+            fig.savefig(save_name, dpi=400)
     plt.style.use('ggplot')
 
 def visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, save_plots=False):
     dimensions = feature_frame.shape[3]
+
     fig, axs = plt.subplots(nrows=1,
                             ncols=dimensions * 2, 
                             figsize=(3 * dimensions * 2 ,
@@ -125,15 +127,16 @@ def visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, sav
         pooled_frame = pool_model.predict(feature_frame)
         sns.heatmap(data=pooled_frame[0, :, :, dim], vmin=0, ax=axs[dim * 2 + 1], cbar=False)
 
-        if save_plots == True:
-            for i, ax in enumerate(axs):
-                extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-                fig.savefig('ax{}_figure.png'.format(i), bbox_inches=extent, dpi=800)
+
 
     set_titles(axs, fig, feature_num, timestep_num)
     plt.show()
 
     if save_plots == True:
+        for i, ax in enumerate(axs):
+            extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+            fig.savefig('ax{}_figure.png'.format(i), bbox_inches=extent, dpi=800)
+
         matplotlib.rcParams.update(matplotlib.rcParamsDefault)
         fig.savefig('last_run.png', format='png', dpi=fig.dpi)
         
@@ -192,28 +195,29 @@ def match_indices(t, dim1, dim2, prob):
         
 def set_titles(axs, fig, feature_num, timestep_num):
 
-    axs[0].set_title('Dimension x raw')
-    axs[1].set_title('Dimension x pooled')
-    axs[2].set_title('Dimension y raw')
-    axs[3].set_title('Dimension y pooled')
+    axs[0].set_title('Dimension y raw')
+    axs[1].set_title('Dimension y pooled')
+    axs[2].set_title('Dimension x raw')
+    axs[3].set_title('Dimension x pooled')
     plt.setp(axs.flat, xlabel='X-label', ylabel='Y-label')
     for i in range(axs.shape[0]):
         axs[i].set_xticks(range(0, feature_num, 10))
         axs[i].set_yticks(range(0, timestep_num, 30))
         axs[i].set_ylabel('Frame number t')
         if i >= int(axs.shape[0] / 2):
-            axs[i].set_xlabel('Coordinate y')
-        else: 
             axs[i].set_xlabel('Coordinate x')
+        else: 
+            axs[i].set_xlabel('Coordinate y')
 
+    fig.canvas.draw()
     fig.tight_layout()
 
 def save_confusion_matrix(y_true, y_pred, logdir, mode='Train'):
     plt.clf()
-    fig = plt.figure(figsize=(13,13))
+    fig = plt.figure(figsize=(16,16))
     y_pred = np.rint(y_pred)
     mat = confusion_matrix(y_true, y_pred, labels=np.sort(np.unique(y_true)))
-    sns.heatmap(data=mat, annot=True, linewidths=.7)
-    plt.xlabel('PredictionsGround truth')
+    sns.heatmap(data=mat, annot=True, linewidths=.6)
+    plt.xlabel('Predictions')
     plt.ylabel('Ground truth')
     fig.savefig(os.path.join(logdir, f'confusion_matrix{mode}.png'), format='png', dpi=fig.dpi)
