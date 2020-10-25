@@ -13,13 +13,20 @@ from person_counting.data_generators import data_generators as dgv
 from person_counting.data_generators import data_generator_cnn as dgv_cnn
 from person_counting.utils.preprocessing import get_filtered_lengths
 
-
+"""
+CBAM activation filter visualization is applied for further understanding 
+of the attention of the cnn
+"""
 label_file = "pcds_dataset_labels_united.csv"
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/best"
 top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
 workers = 0
 multi_processing = False
+
+# Set the layer index which you want to visualize
+LAYER_IDX = 7  # 11 -> 1x1 conv, 9 -> last convulitional layer
+
 
 
 def main():
@@ -32,9 +39,8 @@ def main():
         timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_, snap_path=SNAP_PATH
     )
 
-    layer_idx = 7  # 11 -> 1x1 conv, 9 -> last convulitional layer
 
-    cnn_model.layers[layer_idx].activation = activations.linear
+    cnn_model.layers[LAYER_IDX].activation = activations.linear
     # cnn_model = utils.apply_modifications(cnn_model)
 
     for i in range(len(datagen_test)):
@@ -49,7 +55,7 @@ def main():
         f, ax = plt.subplots(1, 3, dpi=1200)
 
         grads = visualize_cam(
-            model=cnn_model, layer_idx=layer_idx, filter_indices=None, seed_input=img[0], backprop_modifier=None
+            model=cnn_model, LAYER_IDX=LAYER_IDX, filter_indices=None, seed_input=img[0], backprop_modifier=None
         )
 
         jet_heatmap = np.uint8(cm.jet(grads)[..., :3] * 255)
