@@ -27,7 +27,7 @@ label_file = "pcds_dataset_labels_united.csv"
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 
 # The of the model you want to use for evaluation
-SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/t2_2020-09-11-20-22-27_cnn_2020_Sep_12_04_14_37"
+SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/best"
 
 # TODO: Seperate all test cases in different folder
 
@@ -48,12 +48,6 @@ def main():
     elif sys.argv[1] == "test_input_csvs":
         top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
         test_input_csvs(top_path)
-
-    elif sys.argv[1] == "train_best_cpu_cls":
-        top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
-        workers = 1
-        multi_processing = False
-        train_best_cls(workers, multi_processing, top_path, epochs=1)
 
     elif sys.argv[1] == "show_feature_frames":
         top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
