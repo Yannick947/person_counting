@@ -1,1 +1,0 @@
-conda activate myenv & tensorboard --logdir ./ & pause
