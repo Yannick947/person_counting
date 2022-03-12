@@ -102,7 +102,7 @@ pascal-voc-writer==0.1.4
 pathspec==0.8.0
 patsy==0.5.1
 pickleshare==0.7.5
-Pillow==7.2.0
+Pillow==9.0.1
 plotly==4.0.0
 ply==3.11
 progressbar2==3.50.1
