@@ -1,42 +1,33 @@
-import sys
 import os
+import sys
 from time import gmtime, strftime
 
 import tensorflow as tf
-import pandas as pd
-import numpy as np
-import keras
-from keras import Model
-from keras.layers import (
+from sklearn.model_selection import ParameterSampler
+from tensorflow import keras
+from tensorflow.keras import Model
+from tensorflow.keras.layers import (
     Dense,
     MaxPooling2D,
     Conv2D,
-    Flatten,
-    BatchNormalization,
     AveragePooling2D,
-    Reshape,
     LSTM,
-    Layer,
     Lambda,
     Input,
 )
-from sklearn.model_selection import ParameterSampler
 
-from person_counting.data_generators import (
+from src.data_generators import (
     data_generator_cnn_classification as dg_cnn_cls,
 )
-from person_counting.data_generators import data_generators as dgv
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
-from person_counting.utils.hyperparam_utils import (
+from src.evaluation.evaluate_cls import evaluate_run_cls, f1
+from src.models.cnn_regression import squeeze_dim3, squeeze_dim3_shape
+from src.models.model_argparse import parse_args
+from src.utils.hyperparam_utils import (
     create_callbacks,
     get_optimizer,
     get_static_hparams,
-    hard_tanh,
 )
-from person_counting.models.model_argparse import parse_args
-from person_counting.bin.evaluate_cls import evaluate_run_cls, f1
-from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.models.cnn_regression import squeeze_dim3, squeeze_dim3_shape
+from src.utils.preprocessing import get_filtered_lengths
 
 
 def main(args=None):
@@ -128,14 +119,14 @@ def get_samples(args):
 
 
 def train(
-    model,
-    datagen_train,
-    logdir=None,
-    hparams=None,
-    datagen_test=None,
-    workers=16,
-    use_multiprocessing=True,
-    epochs=50,
+        model,
+        datagen_train,
+        logdir=None,
+        hparams=None,
+        datagen_test=None,
+        workers=16,
+        use_multiprocessing=True,
+        epochs=50,
 ):
     """Train a given model with given datagenerator
 

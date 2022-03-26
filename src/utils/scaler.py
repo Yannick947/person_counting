@@ -1,14 +1,10 @@
 import os
-import pandas as pd
+
 import numpy as np
-from random import shuffle
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
-import keras
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-
-from person_counting.data_generators import data_generators as dgv
-from person_counting.utils import preprocessing as pp
+from src.utils import preprocessing as pp
 
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 

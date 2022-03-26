@@ -1,15 +1,15 @@
-import sys
 import os
+import sys
 from time import gmtime, strftime
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import keras
-
-from keras import backend as K
-from keras.models import Model
-from keras.layers import (
+from scipy.stats import loguniform
+from sklearn.model_selection import ParameterSampler
+from tensorflow import keras
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import (
     Dense,
     BatchNormalization,
     AveragePooling2D,
@@ -19,17 +19,16 @@ from keras.layers import (
     TimeDistributed,
     Input,
 )
-from sklearn.model_selection import ParameterSampler
-from scipy.stats import loguniform
+from tensorflow.keras.models import Model
 
-from person_counting.data_generators import data_generator_cnn as gen_cnn
-from person_counting.data_generators import data_generators as dgv
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
-from person_counting.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
-from person_counting.models.model_argparse import parse_args
-from person_counting.bin.evaluate import evaluate_run
-from person_counting.models import cnn_regression as cnn_reg
-from person_counting.utils.preprocessing import get_filtered_lengths
+from src.data_generators import data_generator_cnn as gen_cnn
+from src.data_generators import data_generators as dgv
+from src.evaluation.evaluate import evaluate_run
+from src.models import cnn_regression as cnn_reg
+from src.models.model_argparse import parse_args
+from src.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
+from src.utils.preprocessing import get_filtered_lengths
+from src.utils.visualization_utils import plot_losses, visualize_predictions
 
 
 # Feed Forward Neural Network to get a baseline for performance.

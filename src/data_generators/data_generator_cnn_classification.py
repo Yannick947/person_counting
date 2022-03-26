@@ -1,17 +1,17 @@
-import os
-import pandas as pd
-import numpy as np
 import math
+import os
 from random import shuffle
 
-from tensorflow import keras
+import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from tensorflow import keras
 
-from person_counting.data_generators.data_generators import Generator_CSVS
-from person_counting.data_generators.data_generators import *
-from person_counting.utils.preprocessing import get_filtered_lengths
-from person_counting.utils.preprocessing import apply_file_filters
+from src.data_generators.data_generators import *
+from src.data_generators.data_generators import Generator_CSVS
+from src.utils.preprocessing import apply_file_filters
+from src.utils.preprocessing import get_filtered_lengths
 
 
 class Generator_CSVS_CNN_CLS(Generator_CSVS):
@@ -81,7 +81,7 @@ class Generator_CSVS_CNN_CLS(Generator_CSVS):
 
 
 def create_datagen(
-    top_path, sample, label_file, augmentation_factor=0, filter_hour_above=24, filter_category_noisy=False
+        top_path, sample, label_file, augmentation_factor=0, filter_hour_above=24, filter_category_noisy=False
 ):
     """
     Creates train and test data generators for cnn network.

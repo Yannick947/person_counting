@@ -1,32 +1,29 @@
-import datetime
+import os
+
 import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from vis.visualization import visualize_cam
-from vis.utils import utils
-from keras import activations
-from vis.visualization import visualize_saliency, overlay
+from tensorflow.keras import activations
 
-from person_counting.models import cnn_regression as cnn
-from person_counting.data_generators import data_generators as dgv
-from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.utils.preprocessing import get_filtered_lengths
+from src.models import cnn_regression as cnn
+from src.data_generators import data_generator_cnn as dgv_cnn
+from src.utils.preprocessing import get_filtered_lengths
 
+from src import PROJECT_ROOT
 """
 CBAM activation filter visualization is applied for further understanding 
 of the attention of the cnn
 """
 label_file = "pcds_dataset_labels_united.csv"
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
-SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/best"
-top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
+SNAP_PATH = os.path.join(PROJECT_ROOT,  "person_counting/tensorboard/cnn_regression/warm_start/best")
+top_path = os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected/")
 workers = 0
 multi_processing = False
 
 # Set the layer index which you want to visualize
 LAYER_IDX = 7  # 11 -> 1x1 conv, 9 -> last convulitional layer
-
 
 
 def main():
@@ -38,7 +35,6 @@ def main():
     cnn_model = cnn.create_cnn(
         timestep_num, feature_num, hparams, datagen_train.label_scaler.scale_, snap_path=SNAP_PATH
     )
-
 
     cnn_model.layers[LAYER_IDX].activation = activations.linear
     # cnn_model = utils.apply_modifications(cnn_model)

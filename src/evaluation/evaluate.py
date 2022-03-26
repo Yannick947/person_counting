@@ -1,25 +1,22 @@
-import math
-import statistics
-import os
 import csv
 import operator
+import os
 
-import tensorflow as tf
-from tensorflow.python.ops import math_ops
-from tensorflow.python.keras import backend as K
-from tensorflow.core.util import event_pb2
-import keras
-from keras.models import load_model
-import pandas as pd
 import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.core.util import event_pb2
+from tensorflow.keras.models import load_model
+from tensorflow.python.keras import backend as K
+from tensorflow.python.ops import math_ops
 
-from person_counting.utils.visualization_utils import (
+from src.data_generators.data_generators import get_label, get_video_class
+from src.utils.visualization_utils import (
     plot_losses,
     visualize_predictions,
     visualize_filters,
     save_confusion_matrix,
 )
-from person_counting.data_generators.data_generators import get_label, get_video_class, get_exiting
 
 CATEGORY_MAPPING = {0: "normal_uncrowded", 1: "normal_crowded", 2: "noisy_uncrowded", 3: "noisy_crowded"}
 
@@ -115,7 +112,7 @@ def get_highest_errors(y_pred_orig, y_true_orig, file_names, num_files=10):
 
 
 def save_test_evaluation(
-    model, feature_frames, y_true, logdir, mode, batch_size=None, predictions=None, y_true_orig=None
+        model, feature_frames, y_true, logdir, mode, batch_size=None, predictions=None, y_true_orig=None
 ):
     """Save the metrics for the test run as csv file"""
     print(f"Evaluation for {mode} files: ")
@@ -198,15 +195,12 @@ def parse_model(model=None, logdir=None, compile_model=True, scale=0.066):
     return model
 
 
-def evaluate_predictions(
-    history, y_pred, y_pred_orig, y_true, y_true_orig, visualize, model, mode="test", logdir=None, video_categories=None
-):
+def evaluate_predictions(history, y_pred_orig, y_true_orig, visualize, model, mode="test", logdir=None,
+                         video_categories=None):
     """Evaluate predictions of the best model
     Arguments:
         history: Keras history object created during training
-        y_pred: Predictions
         y_pred_orig: Predictions retransformed
-        y_true: Ground truth
         y_true_orig: Ground truth retransformed
         visualize: Flag indicating if visualization shall be done
         mode: Mode ('validation', or 'test')
@@ -269,7 +263,7 @@ def create_accuracy_rescaled(scale_factor):
     return acc_rescaled
 
 
-def get_predictions(model, gen, top_path):
+def get_predictions(model, gen):
     """Generate predictions from generator and model
 
     Arguments:

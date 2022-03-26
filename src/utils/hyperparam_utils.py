@@ -1,11 +1,11 @@
 import os
 
 import tensorflow as tf
-import keras
+from tensorflow import keras
 from tensorboard.plugins.hparams import api as hp
 from datetime import datetime
 
-from person_counting.bin.evaluate import Evaluate
+from src.evaluation.evaluate import Evaluate
 
 
 def hard_tanh(x):

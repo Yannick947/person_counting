@@ -1,4 +1,7 @@
 import argparse
+import os
+
+from src import PROJECT_ROOT
 
 
 def parse_args(args):
@@ -17,7 +20,7 @@ def parse_args(args):
     parser.add_argument(
         "--top-path",
         help="The parent directory where csv feature and label files are stored",
-        default="C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected_100pcdsimgs_frontinonly/",
+        default=os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected_100pcdsimgs_frontinonly/"),
     )
     parser.add_argument("--label-file", help="The name of the label file", default="pcds_dataset_labels_united.csv")
     parser.add_argument(

@@ -1,17 +1,17 @@
-import sys
-import os
-import pandas as pd
-import numpy as np
-import math
 import abc
-from random import shuffle
+import math
+import os
 import random
+import sys
+from random import shuffle
 
-from tensorflow import keras
+import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
+from tensorflow import keras
 
-from person_counting.models.model_argparse import parse_args
-from person_counting.utils import preprocessing as pp
+from src.models.model_argparse import parse_args
+from src.utils import preprocessing as pp
 
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 
@@ -27,17 +27,17 @@ class Generator_CSVS(keras.utils.Sequence):
     __metaclass__ = abc.ABCMeta
 
     def __init__(
-        self,
-        length_t,
-        length_y,
-        file_names,
-        sample,
-        top_path,
-        label_file,
-        feature_scaler,
-        label_scaler,
-        augmentation_factor=0,
-        inverse_probability=0.5,
+            self,
+            length_t,
+            length_y,
+            file_names,
+            sample,
+            top_path,
+            label_file,
+            feature_scaler,
+            label_scaler,
+            augmentation_factor=0,
+            inverse_probability=0.5,
     ):
 
         """Initialize Generator object.
@@ -153,11 +153,10 @@ class Generator_CSVS(keras.utils.Sequence):
 
         if arr_x is not None:
             if (
-                arr_x.shape[0] != self.unfiltered_length_t
-                or arr_x.shape[1] != self.unfiltered_length_y
-                or arr_x.shape[2] != 2
+                    arr_x.shape[0] != self.unfiltered_length_t
+                    or arr_x.shape[1] != self.unfiltered_length_y
+                    or arr_x.shape[2] != 2
             ):
-
                 raise ValueError("File with wrong dimensions found")
         else:
             raise FileNotFoundError("Failed getting features for file {}".format(file_name))
@@ -292,9 +291,9 @@ def get_entering(file_name, df_y):
     search_str = file_name.replace("\\", "/").replace("\\", "/")
 
     if "front_in" in file_name:
-        search_str = search_str[search_str.find("front_in") :]
+        search_str = search_str[search_str.find("front_in"):]
     else:
-        search_str = search_str[search_str.find("back_out") :]
+        search_str = search_str[search_str.find("back_out"):]
 
     entering = df_y.loc[df_y.file_name == search_str].entering
     return entering
@@ -312,9 +311,9 @@ def get_exiting(file_name, df_y):
     search_str = file_name.replace("\\", "/").replace("\\", "/")
 
     if "front_in" in file_name:
-        search_str = search_str[search_str.find("front_in") :]
+        search_str = search_str[search_str.find("front_in"):]
     else:
-        search_str = search_str[search_str.find("back_out") :]
+        search_str = search_str[search_str.find("back_out"):]
 
     entering = df_y.loc[df_y.file_name == search_str].exiting
     return entering
@@ -333,9 +332,9 @@ def get_video_class(file_name, df_y):
         search_str = file_name.replace("\\", "/").replace("\\", "/")
 
         if "front" in file_name:
-            search_str = search_str[search_str.find("front_in") :]
+            search_str = search_str[search_str.find("front_in"):]
         else:
-            search_str = search_str[search_str.find("back_out") :]
+            search_str = search_str[search_str.find("back_out"):]
 
         video_type = df_y.loc[df_y.file_name == search_str].video_type
         return video_type

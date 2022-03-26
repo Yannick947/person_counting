@@ -1,40 +1,36 @@
-import datetime
-import sys
 import os
-import random
-import time
+import sys
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-import cv2 as cv
-from keras.models import Model
-from keras.layers import Dense, BatchNormalization, AveragePooling2D, MaxPooling2D, Input
+from tensorflow.keras.layers import AveragePooling2D, MaxPooling2D, Input
+from tensorflow.keras.models import Model
 
-from person_counting.models import cnn_classification as cnn_cls
-from person_counting.models import cnn_regression as cnn
-from person_counting.data_generators import data_generators as dgv
-from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.data_generators import data_generator_cnn_classification as dg_cls
-from person_counting.bin.evaluate import evaluate_run
-from person_counting.bin.evaluate_cls import evaluate_run_cls
-from person_counting.utils.preprocessing import get_filtered_lengths, get_video_daytime
-from person_counting.utils.visualization_utils import visualize_input_2d, visualize_input_3d
-from person_counting.data_generators.trajectory_augmentation import augment_trajectory
+from src import PROJECT_ROOT
+from src.data_generators import data_generator_cnn as dgv_cnn
+from src.data_generators import data_generator_cnn_classification as dg_cls
+from src.data_generators.trajectory_augmentation import augment_trajectory
+from src.evaluation.evaluate import evaluate_run
+from src.evaluation.evaluate_cls import evaluate_run_cls
+from src.models import cnn_classification as cnn_cls
+from src.models import cnn_regression as cnn
+from src.utils.preprocessing import get_filtered_lengths, get_video_daytime
+from src.utils.visualization_utils import visualize_input_2d
 
 label_file = "pcds_dataset_labels_united.csv"
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 
 # The of the model you want to use for evaluation
-SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/best"
+SNAP_PATH = os.path.join(PROJECT_ROOT, "person_counting/tensorboard/cnn_regression/warm_start/best")
+
 
 # TODO: Seperate all test cases in different folder
 
 
 def main():
     if sys.argv[1] == "train_best_cpu":
-        top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
+        top_path = os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected/")
         workers = 0
         multi_processing = False
         train_best(workers, multi_processing, top_path, epochs=0, snap_path=SNAP_PATH)
@@ -46,11 +42,11 @@ def main():
         train_best(workers, multi_processing, top_path, epochs=12)
 
     elif sys.argv[1] == "test_input_csvs":
-        top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
+        top_path = os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected/")
         test_input_csvs(top_path)
 
     elif sys.argv[1] == "show_feature_frames":
-        top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
+        top_path = os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected/")
         show_feature_frames(top_path, show_augmentation=True)
 
 
@@ -127,7 +123,7 @@ def test_input_csvs(top_path):
         for i, file_name in enumerate(files):
             if (file_name[-4:] == ".csv") and not ("label" in file_name) and (i in test_indices):
                 full_path = os.path.join(root, file_name)
-                path = full_path[full_path.find("front_in") :].replace("\\", "/")
+                path = full_path[full_path.find("front_in"):].replace("\\", "/")
                 testing_csv_names.append(path)
 
     df_testing_csv_names = pd.Series(testing_csv_names, name="file_names")
@@ -151,7 +147,7 @@ def test_input_csvs(top_path):
         verify_labels = get_verification_labels(file_names_verify, df_verify, batch_size).reshape(batch_size, 1)
         labels_saved = datagen.get_labels().reshape(batch_size, 1)
         assert (labels_saved == verify_labels).all() and (
-            verify_labels == labels_generated.reshape(batch_size, 1)
+                verify_labels == labels_generated.reshape(batch_size, 1)
         ).all(), "Input test for generator fails for files {}".format(file_names_verify)
 
         datagen.reset_label_states()

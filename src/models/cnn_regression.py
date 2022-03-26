@@ -1,47 +1,39 @@
-import sys
-import os
-from time import gmtime, strftime
 import json
+import os
+import sys
+from time import gmtime, strftime
 
 import tensorflow as tf
-import keras
-import pandas as pd
-import numpy as np
-from keras import Model
-from keras.layers import (
+from sklearn.model_selection import ParameterSampler
+from tensorflow import keras
+from tensorflow.keras import Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import (
     Dense,
     MaxPooling2D,
     Conv2D,
-    Flatten,
-    BatchNormalization,
     AveragePooling2D,
-    Reshape,
     LSTM,
-    Layer,
     Lambda,
     Input,
     GRU,
 )
-from keras import backend as K
-from sklearn.model_selection import ParameterSampler
 
-from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.data_generators import data_generators as dgv
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions
-from person_counting.utils.hyperparam_utils import (
-    create_callbacks,
-    get_optimizer,
-    get_static_hparams,
-    hard_tanh,
-)
-from person_counting.models.model_argparse import parse_args, check_args
-from person_counting.bin.evaluate import (
+from src.data_generators import data_generator_cnn as dgv_cnn
+from src.evaluation.evaluate import (
     evaluate_run,
     create_mae_rescaled,
     create_accuracy_rescaled,
     parse_model,
 )
-from person_counting.utils.preprocessing import get_filtered_lengths
+from src.models.model_argparse import parse_args, check_args
+from src.utils.hyperparam_utils import (
+    create_callbacks,
+    get_optimizer,
+    get_static_hparams,
+    hard_tanh,
+)
+from src.utils.preprocessing import get_filtered_lengths
 
 
 def main(args=None):
@@ -166,15 +158,15 @@ def get_samples(args):
 
 
 def train(
-    model,
-    datagen_train,
-    logdir=None,
-    hparams=None,
-    datagen_validation=None,
-    workers=32,
-    use_multiprocessing=True,
-    epochs=70,
-    rescale_factor=1,
+        model,
+        datagen_train,
+        logdir=None,
+        hparams=None,
+        datagen_validation=None,
+        workers=32,
+        use_multiprocessing=True,
+        epochs=70,
+        rescale_factor=1,
 ):
     """Train a given model with given datagenerator
 

@@ -1,25 +1,24 @@
-import sys
+import io
 import os
 import time
-import io
 from contextlib import redirect_stdout
 
-from person_counting.models import cnn_regression as cnn
-from person_counting.data_generators import data_generators as dgv
-from person_counting.data_generators import data_generator_cnn as dgv_cnn
-from person_counting.utils.preprocessing import get_filtered_lengths, get_video_daytime
+from src import PROJECT_ROOT
+from src.data_generators import data_generator_cnn as dgv_cnn
+from src.models import cnn_regression as cnn
+from src.utils.preprocessing import get_filtered_lengths
 
 label_file = "pcds_dataset_labels_united.csv"
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
-SNAP_PATH = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/warm_start/t2_2020-09-11-20-22-27_cnn_2020_Sep_12_04_14_37"
-top_path = "C:/Users/Yannick/Google Drive/person_detection/pcds_dataset_detections/pcds_dataset_detected/"
+SNAP_PATH = os.path.join(PROJECT_ROOT,
+                         "tensorboard/cnn_regression/warm_start/t2_2020-09-11-20-22-27_cnn_2020_Sep_12_04_14_37")
+top_path = os.path.join(PROJECT_ROOT, "pcds_dataset_detections/pcds_dataset_detected/")
 
 TEST_BATCH_SIZES = [1, 2, 4, 8, 16, 32]
 
 
 def main():
     for batch_size in TEST_BATCH_SIZES:
-
         # Supress printing
         trap = io.StringIO()
         with redirect_stdout(trap):

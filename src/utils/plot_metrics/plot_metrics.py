@@ -1,14 +1,15 @@
 import os
 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
+from src import PROJECT_ROOT
 
 LOGGING_METRIC = "epoch_acc_rescaled"
 Y_LABEL = "Accuracy"
-LOG_DIR_SUP = "C:/Users/Yannick/Google Drive/person_counting/tensorboard/cnn_regression/cold_start"
+LOG_DIR_SUP = os.path.join(PROJECT_ROOT, "person_counting/tensorboard/cnn_regression/cold_start")
 LOG_DIRS = {"best model": "best", "second best model": "second_best", "third best model": "third_best"}
 SMOOTH_NUM = 1
 
@@ -37,7 +38,7 @@ def plot_tensorflow_log(log_paths):
                     y[i] = metric_values[i][2]  # value
 
                     if i > SMOOTH_NUM:
-                        y_smooth[i] = np.average(y[i - SMOOTH_NUM : i])
+                        y_smooth[i] = np.average(y[i - SMOOTH_NUM: i])
                     else:
                         y_smooth[i] = np.average(y[0:i])
 

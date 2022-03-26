@@ -1,21 +1,18 @@
-import math
-import statistics
 import os
 
 import numpy as np
-from keras.models import load_model
-import tensorflow as tf
 import pandas as pd
-from keras import backend as K
+from tensorflow.keras import backend as K
 
-from person_counting.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
-from person_counting.data_generators.data_generators import get_entering, get_exiting, get_video_class
-from person_counting.bin.evaluate import parse_model
+from src.evaluation.evaluate import parse_model
+from src.data_generators.data_generators import get_entering, get_video_class
+from src.utils.visualization_utils import plot_losses, visualize_predictions, visualize_filters
 
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
 CATEGORY_MAPPING = {0: "normal_uncrowded", 1: "normal_crowded", 2: "noisy_uncrowded", 3: "noisy_crowded"}
 
-#TODO: Update to new input format
+
+# TODO: Update to new input format
 def evaluate_run_cls(model, history, gen, mode, logdir, top_path, visualize=True):
     """Evaluate a run of certain hyperparameters
     Arguments:

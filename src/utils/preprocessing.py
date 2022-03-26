@@ -3,8 +3,8 @@ import os
 import pandas as pd
 import numpy as np
 
-from person_counting.data_generators import trajectory_augmentation as ta
-from person_counting.utils import scaler
+from src.data_generators import trajectory_augmentation as ta
+from src.utils import scaler
 
 
 class Preprocessor(object):

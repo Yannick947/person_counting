@@ -1,16 +1,10 @@
-import time
 import os
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-import cv2 as cv
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
-from matplotlib.backends.backend_pgf import FigureCanvasPgf
+import matplotlib.pyplot as plt
 import numpy as np
-import pathlib
-import pandas as pd
-from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 plt.style.use("ggplot")
 
@@ -136,7 +130,7 @@ def visualize_input_2d(feature_frame, feature_num, timestep_num, pool_model, sav
         fig.savefig("last_run.png", format="png", dpi=fig.dpi)
 
 
-def visualize_input_3d(feature_frame, pool_model, save_plots=False):
+def visualize_input_3d(feature_frame):
     """Visualize input in 3D (time, x, y)"""
     indices = np.argwhere(feature_frame[0, :, :, :] > 0)
     t = [i[0] for i in indices]
@@ -144,9 +138,6 @@ def visualize_input_3d(feature_frame, pool_model, save_plots=False):
     dim2 = [i[2] for i in indices]
     prob = [feature_frame[0, it, idim1, idim2] for it, idim1, idim2 in zip(t, dim1, dim2)]
     points_x, points_y, points_z = match_indices(t, dim1, dim2, prob)
-
-    # points = pd.DataFrame([points_x, points_y, points_z], axis columns=['t', 'x', 'y'])
-    # points.to_csv('points_3d_plot.csv', index=None)
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -185,7 +176,6 @@ def match_indices(t, dim1, dim2, prob):
 
 
 def set_titles(axs, fig, feature_num, timestep_num):
-
     axs[0].set_title("Dimension y raw")
     axs[1].set_title("Dimension y pooled")
     axs[2].set_title("Dimension x raw")
