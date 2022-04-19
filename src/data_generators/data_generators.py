@@ -1,16 +1,11 @@
 import abc
-import math
 import os
-import random
-import sys
-from random import shuffle
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from tensorflow import keras
 
-from src.models.model_argparse import parse_args
 from src.utils import preprocessing as pp
 
 LABEL_HEADER = ["file_name", "entering", "exiting", "video_type"]
