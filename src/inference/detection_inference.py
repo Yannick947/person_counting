@@ -1,14 +1,34 @@
-import os
 import random
+from logging import getLogger
+from typing import Optional, List, Tuple
 
+import cv2
 import numpy as np
-from tensorflow.keras.models import load_model
+import tensorflow as tf
+import tensorflow_hub as hub
+from matplotlib import pyplot as plt
 
-from inference import custom_object_person_detector
-from src import PROJECT_ROOT
+# Use the inception resnet for more accurate but significantly slower detections
+# module_handle = r"C:\Users\Yannick\Downloads\faster_rcnn_openimages_v4_inception_resnet_v2_1"
+module_handle = r"C:\Users\Yannick\Downloads\openimages_v4_ssd_mobilenet_v2_1"
+CLASSES_TO_FILTER = {"Person", "Man", "Woman"}
+
+detector = hub.load(module_handle).signatures['default']
+
+UPPER_VIDEO_LENGTH = 700  # TODO: Parse this parameter from the counting model
+PREDICTION_THRESHOLD = 0.5
+PREDICTION_THRESHOLD_INCEPTION_RESNET = 0.15
+DOWNSCALE_FACTOR_Y = 3  # Was empirically set to 3 since there is quite no information loss and sparsity is reduced
+logger = getLogger(__name__)
+
+out = cv2.VideoWriter(
+    'output.avi',
+    cv2.VideoWriter_fourcc(*'MJPG'),
+    15.,
+    (320, 240))
 
 
-def generate_csv(video_path, model, args, filter_upper_frames=1000):
+def generate_detection_frame(video_path: str) -> np.array:
     """ Generate the csv files by passing videos to a model
     """
 
@@ -16,11 +36,13 @@ def generate_csv(video_path, model, args, filter_upper_frames=1000):
     num_frames = int(vcapture.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # create empty arrs for predictions.
-    detections_y = create_zeroed_array(args, vcapture, filter_upper_frames)
-    detections_x = create_zeroed_array(args, vcapture, filter_upper_frames)
+    detections_y = create_zeroed_array(vcapture=vcapture)
+    detections_x = create_zeroed_array(vcapture=vcapture)
 
     # Fill arrs with predictions
-    detections_x, detections_y = fill_pred_image(model, detections_x, detections_y, vcapture, args)
+    detections_x, detections_y = fill_pred_image(detections_x=detections_x,
+                                                 detections_y=detections_y,
+                                                 vcapture=vcapture)
 
     stacked_arr = np.stack([detections_x, detections_y], axis=-1, out=None)
 
@@ -29,9 +51,9 @@ def generate_csv(video_path, model, args, filter_upper_frames=1000):
     return stacked_arr
 
 
-def create_zeroed_array(fps: int, vcapture, filter_upper_frames: int, downscale_factor_y: float):
+def create_zeroed_array(vcapture, filter_upper_frames: int = UPPER_VIDEO_LENGTH, fps: Optional[int] = None):
     frame_rate = int(vcapture.get(cv2.CAP_PROP_FPS))
-    height = int(vcapture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    height = int((vcapture.get(cv2.CAP_PROP_FRAME_HEIGHT)) / DOWNSCALE_FACTOR_Y)
 
     if fps == None:
         detections_y_length = int(filter_upper_frames)
@@ -40,10 +62,10 @@ def create_zeroed_array(fps: int, vcapture, filter_upper_frames: int, downscale_
         print('Care about using fps argument, not tested yet -> trial mode')
         detections_y_length = int(filter_upper_frames * fps / frame_rate)
 
-    return np.zeros(shape=(detections_y_length, int(height / downscale_factor_y)))
+    return np.zeros(shape=(detections_y_length, height))
 
 
-def fill_pred_image(model, detections_x, detections_y, vcapture, args):
+def fill_pred_image(detections_x, detections_y, vcapture):
     """ Fill an array with predictions for time and place of a model
     """
     success = True
@@ -51,41 +73,21 @@ def fill_pred_image(model, detections_x, detections_y, vcapture, args):
     frame_rate = int(vcapture.get(cv2.CAP_PROP_FPS))
     height = int(vcapture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     width = int(vcapture.get(cv2.CAP_PROP_FRAME_WIDTH))
-
-    if args.fps:
-        time_scale_factor = int(frame_rate / args.fps)
-    else:
-        time_scale_factor = 1
+    logger.info(f"Video properties:\nImage height: {height}, Image width: {width}, frame rate: {frame_rate}.")
 
     while success:
         frame_index += 1
         success, image = vcapture.read()
 
-        if success and ((frame_index % time_scale_factor) == 0):
-            image = preprocess_image(image)
-
-            # 800 and 1300 are values usally used during training, adjust if used differently
-            image, scale = resize_image(image, min_side=800, max_side=1333)
-            boxes, scores, labels = model.predict_on_batch(np.expand_dims(image, axis=0))
-            boxes /= scale
-
-            for box, score, label in zip(boxes[0], scores[0], labels[0]):
-
-                # scores are sorted so we can break
-                if score < args.predict_threshold:
-                    break
-
-                # If model predicts more classes than we want to have, filter here
-                if (label != 0):
-                    continue
-
-                b = box.astype(int)
+        if success:
+            centers, scores = get_person_centers_resnet(image=image)
+            for center, score in zip(centers, scores):
 
                 # fill arr with probability at the center of y axis, consider rezizing with args_downscale_factor_y
                 try:
-                    t = int(frame_index / time_scale_factor)
-                    x = int((b[0] + b[2]) * (height / width) / args.downscale_factor_y / 2)
-                    y = int((b[3] + b[1]) / args.downscale_factor_y / 2)
+                    t = int(frame_index)
+                    x = int(center[0] * (height / width) / DOWNSCALE_FACTOR_Y)
+                    y = int(center[1] / DOWNSCALE_FACTOR_Y)
 
                     # If position already contains a pixel due to downscaling, search new position along movement axis
                     if detections_y[t, y] == 0:
@@ -97,10 +99,52 @@ def fill_pred_image(model, detections_x, detections_y, vcapture, args):
                         t, x = get_destination(detections_x, (t, x), axis='x')
                         detections_y[t, y] = score
                         detections_x[t, x] = score
-                except:
-                    print('Detection out of bounds, t: {}, y: {}, x: {}'.format(t, y, x))
+                except ValueError as exc:
+                    print(exc)
+                    print(f'Detection out of bounds, t: {t}, y: {y}, x: {x}')
 
     return detections_y, detections_x
+
+
+def get_person_centers_resnet(image: np.array) -> Tuple[List[Tuple[int, int]], List[float]]:
+    converted_img = tf.image.convert_image_dtype(image, tf.float32)[tf.newaxis, ...]
+    result = detector(converted_img)
+    result = {key: value.numpy() for key, value in result.items()}
+    boxes, class_entities, scores = [], [], []
+    for i in range(len(result["detection_boxes"])):
+        if is_valid_detection(result=result, i=i):
+            print(result["detection_boxes"][i], result["detection_class_entities"][i], result["detection_scores"][i])
+            boxes.append(to_absolute_centers(result["detection_boxes"][i], image=image))
+            class_entities.append(result["detection_class_entities"][i])
+            scores.append(min(1.0, result["detection_scores"][i] + 0.7))
+
+    return boxes, scores
+
+
+def to_absolute_centers(detection_box: List[float], image: np.array) -> Tuple[int, int]:
+    ymin, xmin, ymax, xmax = detection_box[0], detection_box[1], detection_box[2], detection_box[3]
+    im_height = image.shape[0]
+    im_width = image.shape[1]
+    absolute_box = (xmin * im_width, ymin * im_height, xmax * im_width, ymax * im_height)
+    center = get_center_from_absolute_box(box=absolute_box)
+    return center
+
+
+def is_valid_detection(result: dict, i: int) -> bool:
+    return result["detection_class_entities"][i].decode('UTF-8') in CLASSES_TO_FILTER and result["detection_scores"][
+        i] > PREDICTION_THRESHOLD_INCEPTION_RESNET
+
+
+def get_center_from_absolute_box(box: tuple) -> Tuple:
+    """ Expecting the box to be absolute of format xA, yA, xB, yB.
+    """
+    (xA, yA, xB, yB) = box
+    width = abs(xB - xA)
+    height = abs(yB - yA)
+
+    center_x = min(xA, xB) + width / 2
+    center_y = min(yA, yB) + height / 2
+    return center_x, center_y
 
 
 def get_destination(arr, old_position, axis):
@@ -135,27 +179,18 @@ def get_destination(arr, old_position, axis):
     return old_position
 
 
-def create_zeroed_array(args, vcapture, filter_upper_frames):
-    frame_rate = int(vcapture.get(cv2.CAP_PROP_FPS))
-    height = int(vcapture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    if args.fps == None:
-        detections_y_length = int(filter_upper_frames)
-
-    else:
-        print('Care about using fps argument, not tested yet -> trial mode')
-        detections_y_length = int(filter_upper_frames * args.fps / frame_rate)
-
-    return np.zeros(shape=(detections_y_length, int(height / args.downscale_factor_y)))
-
-
 def detect_video(video_path: str) -> np.array:
-    model_path = os.path.join(os.path.dirname(PROJECT_ROOT), "models", "person_detector_retinanet_resnet50.h5")
-    person_detector = load_model(model_path,
-                                 custom_objects=custom_object_person_detector)
-    detection_frame = generate_csv(video_path=video_path, model=person_detector)
+    detection_frame = generate_detection_frame(video_path=video_path)
     return detection_frame
 
 
 if __name__ == '__main__':
-    detect_video(video_path="./bus_video.avi")
+    detected_frame = detect_video(video_path="./bus_video.avi")
+
+    plt.imshow(detected_frame[:, :, 0])
+    plt.show()
+
+    plt.imshow(detected_frame[:, :, 1])
+    plt.show()
+
+    np.save("./detected_video.npy", arr=detected_frame)
