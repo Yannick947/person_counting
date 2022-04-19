@@ -22,6 +22,12 @@ Detection Frames are the inputs for the person counting algorithm. You can creat
   <img src="images/entering_persons_y_t_coordinate.png" width="200" /> 
 </p>
 
+## Inference Example 
+
+In the inference folder there can be found an example how inference is done on an entire video. The current example does 
+not use a fine tuned person detector anymore to avoid version conflicts with the Retinanet implementation that was used
+to fine tune the person detecotr. Therefore the person detections are worse and since the person counter was trained on
+the Retinanet detections the overall results are worse than the results that were achieved with the Retinanet model.
 
 ## Further ideas: 
 
