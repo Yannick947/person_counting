@@ -5,8 +5,8 @@ from time import gmtime, strftime
 import tensorflow as tf
 from sklearn.model_selection import ParameterSampler
 from tensorflow import keras
-from tensorflow.keras import Model
-from tensorflow.keras.layers import (
+from tensorflow.python.keras import Model
+from tensorflow.python.keras.layers import (
     Dense,
     MaxPooling2D,
     Conv2D,

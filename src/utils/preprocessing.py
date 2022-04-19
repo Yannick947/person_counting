@@ -1,10 +1,8 @@
 import os
 
-import pandas as pd
 import numpy as np
 
 from src.data_generators import trajectory_augmentation as ta
-from src.utils import scaler
 
 
 class Preprocessor(object):
@@ -43,7 +41,7 @@ class Preprocessor(object):
         assert arr is not None, "Scaling or augmentation went wrong, check implementation"
 
         assert (
-            arr.shape[0] == (self.length_t) and arr.shape[1] == (self.length_y) and arr.shape[2] == 2
+                arr.shape[0] == (self.length_t) and arr.shape[1] == (self.length_y) and arr.shape[2] == 2
         ), "Shapes are not consistent for feature data frame"
 
         return arr
@@ -165,7 +163,7 @@ def get_video_daytime(file_name):
     else:
         raise FileNotFoundError("Not a valid file")
 
-    hour = int(file_name[time_stop_pos - 8 : time_stop_pos - 6])
-    minutes = int(file_name[time_stop_pos - 5 : time_stop_pos - 3])
+    hour = int(file_name[time_stop_pos - 8: time_stop_pos - 6])
+    minutes = int(file_name[time_stop_pos - 5: time_stop_pos - 3])
 
     return hour, minutes

@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.python.keras.models import load_model
 
 from evaluation.evaluate import create_accuracy_rescaled, hard_tanh, create_mae_rescaled
-#from inference.detection_inference import detect_video
+from inference.detection_inference import detect_video
 from src import PROJECT_ROOT
 
 COUNTER_MODEL_PATH = os.path.join(os.path.dirname(PROJECT_ROOT), "models/person_counter.hdf5")
@@ -17,6 +17,8 @@ BUS_VIDEO_NAME = 'bus_video.avi'
 local_bus_video_path = os.path.join(os.getcwd(), BUS_VIDEO_NAME)
 
 logger = logging.getLogger(__name__)
+
+
 # urllib.request.urlretrieve(sample_bus_video_link, local_bus_video_path)
 
 
@@ -41,8 +43,7 @@ def main():
 
 def get_detected_video_frame(video_path=local_bus_video_path) -> np.array:
     if os.path.exists(local_bus_video_path):
-        return np.load("./detected_video.npy")
-        #return detect_video(video_path=video_path)
+        return detect_video(video_path=video_path)
     else:
         logger.info("Video was not downloaded, using previously detected sample video detections. ")
         return np.load("./detected_video.npy")

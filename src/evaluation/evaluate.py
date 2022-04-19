@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.core.util import event_pb2
-from tensorflow.keras.models import load_model
+from tensorflow.python.keras.models import load_model
 from tensorflow.python.keras import backend as K
 from tensorflow.python.ops import math_ops
 

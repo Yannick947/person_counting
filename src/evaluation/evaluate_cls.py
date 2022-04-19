@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import pandas as pd
-from tensorflow.keras import backend as K
+from tensorflow.python.keras import backend as K
 
 from src.evaluation.evaluate import parse_model
 from src.data_generators.data_generators import get_entering, get_video_class

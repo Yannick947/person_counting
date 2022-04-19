@@ -4,8 +4,8 @@ import sys
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from tensorflow.keras.layers import AveragePooling2D, MaxPooling2D, Input
-from tensorflow.keras.models import Model
+from tensorflow.python.keras.layers import AveragePooling2D, MaxPooling2D, Input
+from tensorflow.python.keras.models import Model
 
 from src import PROJECT_ROOT
 from src.data_generators import data_generator_cnn as dgv_cnn

@@ -2,33 +2,24 @@ import os
 import sys
 from time import gmtime, strftime
 
-import numpy as np
-import pandas as pd
-import tensorflow as tf
 from scipy.stats import loguniform
 from sklearn.model_selection import ParameterSampler
 from tensorflow import keras
-from tensorflow.keras import backend as K
-from tensorflow.keras.layers import (
+from tensorflow.python.keras.layers import (
     Dense,
-    BatchNormalization,
     AveragePooling2D,
-    LSTM,
     MaxPooling2D,
     Flatten,
-    TimeDistributed,
     Input,
 )
-from tensorflow.keras.models import Model
+from tensorflow.python.keras.models import Model
 
 from src.data_generators import data_generator_cnn as gen_cnn
-from src.data_generators import data_generators as dgv
 from src.evaluation.evaluate import evaluate_run
 from src.models import cnn_regression as cnn_reg
 from src.models.model_argparse import parse_args
-from src.utils.hyperparam_utils import create_callbacks, get_optimizer, get_static_hparams
+from src.utils.hyperparam_utils import get_optimizer, get_static_hparams
 from src.utils.preprocessing import get_filtered_lengths
-from src.utils.visualization_utils import plot_losses, visualize_predictions
 
 
 # Feed Forward Neural Network to get a baseline for performance.
