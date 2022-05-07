@@ -37,7 +37,7 @@ Inspired by the 3D input data (x-, y- and time coordinates from the video) in th
 
 ## Citation
 
-The work of this code was published as a paper and please consider citing the paper when using parts of this work: 
+The work of this code was published as a [paper](https://ieeexplore.ieee.org/document/9742924) and please consider citing the paper when using parts of this work: 
 
 ```
 @INPROCEEDINGS{9742924,
