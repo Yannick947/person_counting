@@ -35,3 +35,16 @@ Inspired by the 3D input data (x-, y- and time coordinates from the video) in th
 
 ![alt-text-1](/images/8persons_3d_plot.png "8 Persons entering the bus for x- y- and t-coordinate")
 
+## Citation
+
+The work of this code was published as a paper and please consider citing the paper when using parts of this work: 
+
+```
+@INPROCEEDINGS{9742924,
+               author={Baumann, Daniel and Sommer, Martin and Schrempp, Yannick and Sax, Eric},
+               booktitle={2022 International Conference on Connected Vehicle and Expo (ICCVE)},
+               title={Use of Deep Learning Methods for People Counting in Public Transport},   
+               year={2022},
+               pages={1-6},
+               doi={10.1109/ICCVE52871.2022.9742924}}
+```
